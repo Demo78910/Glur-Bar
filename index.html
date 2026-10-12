@@ -59,6 +59,7 @@ input:focus,select:focus{border-color:var(--gold)}
 @media(min-width:650px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.wrap{padding-top:22px}.formgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style>
 </head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <body>
 <header class="top"><div class="brand">GLUR BAR</div><div class="sub">STOCK · RECIPES · SALES · REPORTS</div></header>
 <main class="wrap" id="app"></main>
@@ -67,6 +68,14 @@ input:focus,select:focus{border-color:var(--gold)}
 </nav>
 <div id="toast" class="toast hidden" role="status"></div>
 <script>
+const SUPABASE_URL =
+  "https://zkicghxgfuybwfnwxlfg.supabase.co";
+const SUPABASE_KEY =
+  "sb_publishable_rbvnWD6TtzMqjxhWi49ZjQ_IggouNp2";
+const glurSupabase = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
 'use strict';
 const KEY='glurBarApp_v1';
 const blank=()=>({stock:[],recipes:[],sales:[],receipts:[],expenses:[]});
