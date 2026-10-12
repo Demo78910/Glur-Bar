@@ -132,7 +132,7 @@ input::placeholder,textarea::placeholder{color:#89776d}
 <div id="glurAccount" class="glur-account hidden" aria-label="ข้อมูลบัญชีผู้ใช้"><span id="glurAccountText">กำลังตรวจสอบสิทธิ์…</span><button type="button" id="glurLogout" class="btn secondary smallbtn">ออกจากระบบ</button></div>
 <main class="wrap" id="app"></main>
 <nav class="nav" id="nav">
-<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="settings"><span>⚙</span>สำรอง</button>
+<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
 </nav>
 <div id="toast" class="toast hidden" role="status"></div>
 <script>
@@ -664,6 +664,115 @@ const glurSalesPreviousSetPage=setPage;
 setPage=function(p){glurSalesPreviousSetPage(p);if(p==='sales'){loadGlurSales();if(!recipeCloudReady)loadCloudRecipes()}};
 const glurSalesPreviousShowAuthenticated=showAuthenticated;
 showAuthenticated=function(user){glurAdjustRole='';glurEditingSaleId=null;glurSalesPreviousShowAuthenticated(user);glurLoadAdjustmentAccess().then(()=>loadGlurSales())};
+
+
+// GLUR BAR team administration and stock adjustment audit (cloud)
+let glurTeamMembers=[],glurTeamError='',glurTeamBusy=false,glurAuditRows=[],glurAuditError='',glurAuditNames={};
+function glurShowRoleNav(){
+  document.querySelectorAll('#nav button[data-page="team"]').forEach(b=>b.classList.toggle('hidden',glurAdjustRole!=='owner'));
+  document.querySelectorAll('#nav button[data-page="audit"]').forEach(b=>b.classList.toggle('hidden',!glurCanAdjust()));
+  if(page==='team'&&glurAdjustRole!=='owner')setPage('dashboard');
+  if(page==='audit'&&!glurCanAdjust())setPage('dashboard');
+}
+async function glurManageUsers(action,params={}){
+  const {data:{session},error:sessionError}=await glurSupabase.auth.getSession();
+  if(sessionError||!session?.access_token)throw Error('กรุณาเข้าสู่ระบบใหม่');
+  const response=await fetch(SUPABASE_URL+'/functions/v1/glur-manage-users',{
+    method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+session.access_token},
+    body:JSON.stringify({action,shop_id:GLUR_SHOP_ID,...params})
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||result.error)throw Error(result.error||'HTTP '+response.status);
+  return result;
+}
+async function glurLoadTeam(){
+  if(glurAdjustRole!=='owner')return;
+  glurTeamError='';
+  try{const result=await glurManageUsers('list');glurTeamMembers=result.members||[]}
+  catch(e){glurTeamError=e.message||String(e)}
+  if(page==='team')renderGlurTeam();
+}
+function renderGlurTeam(){
+  if(glurAdjustRole!=='owner'){shell('จัดการพนักงาน','<div class="hint">เฉพาะ Owner เท่านั้น</div>');return}
+  shell('จัดการพนักงาน',`<div class="hint">เฉพาะ Owner · พนักงานล็อกอินด้วย Username และรหัสผ่าน · ไม่ต้องเปิด Supabase เพื่อเพิ่มบัญชี</div>
+    ${glurTeamError?`<div class="hint warn">${esc(glurTeamError)}</div>`:''}
+    <div class="card"><div class="section-title" style="margin-top:0">＋ สร้างบัญชีใหม่</div>
+      <form id="glurTeamCreate" class="stack" autocomplete="off">
+        <div class="field"><label>Username (a-z, 0-9, _ ความยาว 3–30)</label><input name="username" required minlength="3" maxlength="30" pattern="[a-z0-9_]{3,30}" autocapitalize="off" autocomplete="off" placeholder="เช่น bar_staff01"></div>
+        <div class="field"><label>รหัสผ่านเริ่มต้น (อย่างน้อย 12 ตัว)</label><input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></div>
+        <div class="field"><label>ตำแหน่ง</label><select name="role"><option value="staff">Staff · พนักงาน</option><option value="manager">Manager · ผู้จัดการ</option></select></div>
+        <button type="submit" class="btn full" ${glurTeamBusy?'disabled':''}>สร้างบัญชีพนักงาน</button>
+      </form></div>
+    <div class="section-title">บัญชีในร้าน (${glurTeamMembers.length})</div>
+    <div class="card">${glurTeamMembers.length?glurTeamMembers.map(m=>`<div class="item"><div style="min-width:0"><div class="item-name">${esc(m.username||'ไม่มี Username')}</div><div class="small muted">${esc(m.role)} · ${esc(glurSaleDate(m.created_at))}</div></div>
+    ${m.role==='owner'?'<span class="pill">Owner</span>':`<div class="actions"><select data-team-role="${esc(m.user_id)}" aria-label="เปลี่ยนตำแหน่ง"><option value="staff" ${m.role==='staff'?'selected':''}>Staff</option><option value="manager" ${m.role==='manager'?'selected':''}>Manager</option></select><button type="button" class="btn danger smallbtn" data-team-remove="${esc(m.user_id)}">ถอนสิทธิ์</button></div>`}</div>`).join(''):empty('กดรีเฟรชเพื่อโหลดรายชื่อ')}</div>
+    <button id="glurTeamRefresh" type="button" class="btn secondary full">↻ รีเฟรชรายชื่อ</button>
+    <div class="hint">การถอนสิทธิ์จะนำพนักงานออกจากร้าน แต่ไม่ได้ลบประวัติยอดขายหรือบัญชี Supabase Auth</div>`);
+  document.getElementById('glurTeamRefresh').onclick=glurLoadTeam;
+  document.getElementById('glurTeamCreate').onsubmit=async e=>{
+    e.preventDefault();if(glurTeamBusy)return;const form=e.currentTarget;
+    const username=form.elements.username.value.trim(),password=form.elements.password.value,role=form.elements.role.value;
+    if(!/^[a-z0-9_]{3,30}$/.test(username)||password.length<12){toast('ตรวจสอบ Username และรหัสผ่าน');return}
+    if(!confirm('ยืนยันสร้างบัญชี '+username+' ('+role+') ?'))return;
+    glurTeamBusy=true;form.querySelector('button[type=submit]').disabled=true;
+    try{await glurManageUsers('create',{username,password,role});toast('สร้างบัญชี '+username+' สำเร็จ');await glurLoadTeam()}
+    catch(err){toast('สร้างบัญชีไม่สำเร็จ: '+(err.message||err));glurTeamBusy=false;renderGlurTeam();return}
+    finally{glurTeamBusy=false}
+  };
+  document.querySelectorAll('[data-team-role]').forEach(sel=>sel.onchange=async()=>{
+    const member=glurTeamMembers.find(x=>x.user_id===sel.dataset.teamRole);
+    if(!member||!confirm('เปลี่ยน '+(member.username||'บัญชี')+' เป็น '+sel.value+' ?')){renderGlurTeam();return}
+    sel.disabled=true;
+    try{await glurManageUsers('set_role',{user_id:member.user_id,role:sel.value});toast('เปลี่ยนตำแหน่งสำเร็จ');await glurLoadTeam()}
+    catch(e){toast('เปลี่ยนตำแหน่งไม่สำเร็จ: '+(e.message||e));renderGlurTeam()}
+  });
+  document.querySelectorAll('[data-team-remove]').forEach(btn=>btn.onclick=async()=>{
+    const member=glurTeamMembers.find(x=>x.user_id===btn.dataset.teamRemove);
+    if(!member||!confirm('ถอนสิทธิ์ '+(member.username||'บัญชี')+' ออกจากร้าน?'))return;
+    btn.disabled=true;
+    try{await glurManageUsers('remove',{user_id:member.user_id});toast('ถอนสิทธิ์สำเร็จ');await glurLoadTeam()}
+    catch(e){toast('ถอนสิทธิ์ไม่สำเร็จ: '+(e.message||e));renderGlurTeam()}
+  });
+}
+async function glurLoadAudit(){
+  if(!glurCanAdjust())return;
+  glurAuditError='';
+  const {data,error}=await glurSupabase.from('glur_sale_adjustments')
+    .select('id,sale_id,stock_id,quantity_before,quantity_after,reason,adjusted_by,created_at')
+    .eq('shop_id',GLUR_SHOP_ID).order('created_at',{ascending:false}).limit(200);
+  if(error){glurAuditError=error.message;glurAuditRows=[]}else glurAuditRows=data||[];
+  // Resolve employee names from shop membership only; fall back to shortened user ID for former members.
+  const {data:members}=await glurSupabase.from('glur_members').select('user_id,role').eq('shop_id',GLUR_SHOP_ID);
+  const ids=(members||[]).map(x=>x.user_id);
+  glurAuditNames={};
+  if(ids.length){const {data:names}=await glurSupabase.from('glur_usernames').select('user_id,username').in('user_id',ids);
+    (names||[]).forEach(x=>glurAuditNames[x.user_id]=x.username);
+  }
+  if(page==='audit')renderGlurAudit();
+}
+function renderGlurAudit(){
+  if(!glurCanAdjust()){shell('ประวัติการปรับสต๊อก','<div class="hint">เฉพาะ Owner / Manager เท่านั้น</div>');return}
+  shell('ประวัติการปรับสต๊อก',`<div class="hint">รายการปรับปริมาณใช้จริงล่าสุด 200 รายการ · อ่านจาก Supabase · ไม่กระทบสต๊อก</div>
+    ${glurAuditError?`<div class="hint warn">โหลดประวัติไม่สำเร็จ: ${esc(glurAuditError)}</div>`:''}
+    <button id="glurAuditRefresh" type="button" class="btn secondary full">↻ รีเฟรชประวัติ</button>
+    <div class="card" style="margin-top:12px">${glurAuditRows.length?glurAuditRows.map(a=>{
+      const stock=cloudStock.find(s=>s.id===a.stock_id);
+      const diff=num(a.quantity_after)-num(a.quantity_before);
+      const who=glurAuditNames[a.adjusted_by]||('ID '+String(a.adjusted_by).slice(0,8)+'…');
+      return `<div class="item"><div style="min-width:0;flex:1"><div class="item-name">${esc(stock?.name||'วัตถุดิบที่ไม่อยู่ในสต๊อก')} · ${num(a.quantity_before)} → ${num(a.quantity_after)} ${esc(stock?.unit||'')}</div>
+        <div class="small ${diff>0?'warn':'muted'}">${diff>0?'ตัดเพิ่ม '+diff:diff<0?'คืนสต๊อก '+Math.abs(diff):'ไม่เปลี่ยน'} ${esc(stock?.unit||'')}</div>
+        <div class="small muted">${esc(glurSaleDate(a.created_at))} · โดย ${esc(who)}</div>
+        <div class="small" style="white-space:pre-wrap">เหตุผล: ${esc(a.reason)}</div></div></div>`
+    }).join(''):empty('ยังไม่มีประวัติการปรับสต๊อก')}</div>`);
+  document.getElementById('glurAuditRefresh').onclick=glurLoadAudit;
+}
+const glurTeamPreviousRender=render;
+render=function(){if(!currentUser)return;if(page==='team'){renderGlurTeam();return}if(page==='audit'){renderGlurAudit();return}glurTeamPreviousRender()};
+const glurTeamPreviousSetPage=setPage;
+setPage=function(p){if(p==='team'&&glurAdjustRole!=='owner'){toast('เฉพาะ Owner เท่านั้น');return}if(p==='audit'&&!glurCanAdjust()){toast('เฉพาะ Owner / Manager เท่านั้น');return}
+  glurTeamPreviousSetPage(p);if(p==='team')glurLoadTeam();if(p==='audit')glurLoadAudit()};
+const glurTeamPreviousLoadAccess=glurLoadAdjustmentAccess;
+glurLoadAdjustmentAccess=async function(){await glurTeamPreviousLoadAccess();glurShowRoleNav()};
 
 initAuth();
 </script>
