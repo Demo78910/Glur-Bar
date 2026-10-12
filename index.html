@@ -487,10 +487,31 @@ showAuthenticated=function(user){glurReceiveOldShowAuthenticated(user);loadCloud
 // GLUR BAR — cloud sales. Calls the existing four-argument RPC only.
 let glurSales=[],glurSaleItems=[],glurSalesReady=false,glurSalesError='',glurSalesBusy=false;
 let glurSalesSearch='',glurSaleHistoryLimit=50;
+let glurAdjustRole='',glurSaleIngredients=[],glurAdjustments=[],glurEditingSaleId=null,glurAdjustBusy=false;
+async function glurLoadAdjustmentAccess(){
+  glurAdjustRole='';
+  if(!currentUser)return;
+  const uid=currentUser.id;
+  const {data,error}=await glurSupabase.from('glur_members').select('role').eq('shop_id',GLUR_SHOP_ID).eq('user_id',uid).limit(1);
+  if(!error&&currentUser?.id===uid){glurAdjustRole=data?.[0]?.role||'';if(page==='sales')renderGlurSales()}
+}
+function glurCanAdjust(){return glurAdjustRole==='owner'||glurAdjustRole==='manager'}
+async function glurLoadSaleIngredients(){
+  glurSaleIngredients=[];glurAdjustments=[];
+  const ids=glurSales.map(s=>s.id);
+  if(!ids.length)return;
+  const {data,error}=await glurSupabase.from('glur_sale_ingredients').select('id,sale_id,stock_id,quantity_used,cost_per_unit').in('sale_id',ids);
+  if(!error)glurSaleIngredients=data||[];
+  if(glurCanAdjust()){
+    const res=await glurSupabase.from('glur_sale_adjustments').select('id,sale_id,stock_id,quantity_before,quantity_after,reason,adjusted_by,created_at').eq('shop_id',GLUR_SHOP_ID).in('sale_id',ids).order('created_at',{ascending:false}).limit(150);
+    if(!res.error)glurAdjustments=res.data||[];
+  }
+}
+
 async function loadGlurSales(){
   glurSalesError='';
   const {data,error}=await glurSupabase.from('glur_sales')
-    .select('id,shop_id,sold_by,total_amount,total_cost,sold_at,created_at,note')
+    .select('id,shop_id,sold_by,total_amount,total_cost,sold_at,created_at,note,recipe_name,quantity_sold')
     .eq('shop_id',GLUR_SHOP_ID).order('sold_at',{ascending:false}).limit(glurSaleHistoryLimit);
   if(error){glurSalesError=error.message;glurSalesReady=false}
   else{
@@ -503,6 +524,7 @@ async function loadGlurSales(){
       // Older/newer deployments can differ: history totals still work if item details are unavailable.
       if(!res.error)glurSaleItems=res.data||[];
     }
+    await glurLoadSaleIngredients();
   }
   if(currentUser&&page==='sales')renderGlurSales();
 }
@@ -512,8 +534,11 @@ function renderGlurSales(){
   const negatives=cloudStock.filter(x=>num(x.quantity)<0);
   const history=glurSales.map(s=>{
     const items=glurSaleItems.filter(i=>i.sale_id===s.id);
-    const name=items.length?items.map(i=>`${esc(i.recipe_name)} × ${num(i.quantity)}`).join(', '):'รายการขาย';
-    return `<div class="item"><div style="min-width:0"><div class="item-name">${name}</div><div class="small muted">${esc(glurSaleDate(s.sold_at||s.created_at))} · ต้นทุน ${money(s.total_cost)}</div>${s.note?`<div class="small muted" style="white-space:pre-wrap">หมายเหตุ: ${esc(s.note)}</div>`:''}</div><strong style="white-space:nowrap">${money(s.total_amount)}</strong></div>`;
+    const name=s.recipe_name?`${esc(s.recipe_name)} × ${num(s.quantity_sold||1)}`:(items.length?items.map(i=>`${esc(i.recipe_name)} × ${num(i.quantity)}`).join(', '):'รายการขาย');
+    const ingredients=glurSaleIngredients.filter(i=>i.sale_id===s.id);
+    const adjustButton=glurCanAdjust()&&ingredients.length?`<button type="button" class="btn secondary smallbtn" data-glur-adjust="${s.id}" style="margin-top:9px">ปรับวัตถุดิบที่ใช้จริง</button>`:'';
+    const editor=glurEditingSaleId===s.id&&glurCanAdjust()?glurAdjustmentEditor(s,ingredients):'';
+    return `<div class="item"><div style="min-width:0"><div class="item-name">${name}</div><div class="small muted">${esc(glurSaleDate(s.sold_at||s.created_at))} · ต้นทุน ${money(s.total_cost)}</div>${s.note?`<div class="small muted" style="white-space:pre-wrap">หมายเหตุ: ${esc(s.note)}</div>`:''}${adjustButton}${editor}</div><strong style="white-space:nowrap">${money(s.total_amount)}</strong></div>`;
   }).join('');
   shell('ขายเครื่องดื่ม · ออนไลน์',`
     <div class="hint">บันทึกยอดขายและตัดสต๊อกผ่าน Supabase · Staff / Manager / Owner บันทึกขายและหมายเหตุได้ · หมายเหตุไม่เปลี่ยนปริมาณที่ตัดตามสูตร</div>
@@ -541,6 +566,36 @@ function renderGlurSales(){
     <div class="card">${!glurSalesReady&&!glurSalesError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติการขาย')}</div>
     <div class="small muted">แสดง ${glurSaleHistoryLimit} รายการล่าสุด · ข้อมูลยอดขายจาก Supabase · หากไม่มีชื่อเมนูในประวัติ แสดงเฉพาะยอดรวมจากบิล</div>
   `);
+  document.querySelectorAll('[data-glur-adjust]').forEach(btn=>btn.onclick=()=>{
+    glurEditingSaleId=glurEditingSaleId===btn.dataset.glurAdjust?null:btn.dataset.glurAdjust;
+    renderGlurSales();
+  });
+  document.querySelectorAll('[data-glur-adjust-form]').forEach(f=>{
+    const update=()=>{
+      const si=glurSaleIngredients.find(x=>x.sale_id===f.dataset.glurAdjustForm&&x.stock_id===f.elements.stock_id.value);
+      const st=cloudStock.find(x=>x.id===f.elements.stock_id.value);
+      const old=si?num(si.quantity_used):0;
+      f.elements.new_quantity.value=si?String(old):'';
+      f.querySelector('[data-glur-old]').textContent=si?`ตัดไปแล้ว ${old} ${st?.unit||''} · คงเหลือปัจจุบัน ${num(st?.quantity)} ${st?.unit||''}`:'ไม่มีข้อมูล';
+    };
+    f.elements.stock_id.onchange=update;update();
+    f.onsubmit=async e=>{
+      e.preventDefault();if(glurAdjustBusy)return;
+      const si=glurSaleIngredients.find(x=>x.sale_id===f.dataset.glurAdjustForm&&x.stock_id===f.elements.stock_id.value);
+      const newQ=Number(f.elements.new_quantity.value),reason=f.elements.reason.value.trim();
+      if(!si||!Number.isFinite(newQ)||newQ<0||!reason){toast('กรอกปริมาณที่ใช้จริงและเหตุผลให้ครบ');return}
+      if(newQ===num(si.quantity_used)){toast('ปริมาณใหม่เท่ากับเดิม');return}
+      if(!confirm(`ยืนยันแก้จาก ${si.quantity_used} เป็น ${newQ} และปรับสต๊อกส่วนต่าง?`))return;
+      glurAdjustBusy=true;const b=f.querySelector('[type=submit]');b.disabled=true;b.textContent='กำลังบันทึก…';
+      try{
+        const {error}=await glurSupabase.rpc('glur_adjust_sale_ingredient',{p_sale_id:si.sale_id,p_stock_id:si.stock_id,p_new_quantity:newQ,p_reason:reason});
+        if(error)throw error;
+        toast('ปรับปริมาณและบันทึกประวัติสำเร็จ');glurEditingSaleId=null;
+        await Promise.all([loadCloudStock(),loadGlurSales()]);
+      }catch(err){toast('แก้ไขไม่สำเร็จ: '+(err.message||err));b.disabled=false;b.textContent='ยืนยันปรับสต๊อก'}
+      finally{glurAdjustBusy=false}
+    };
+  });
   const form=document.getElementById('glurCloudSaleForm');
   const selector=form.elements.recipe_id;
   const preview=()=>{
@@ -585,6 +640,20 @@ function renderGlurSales(){
     finally{glurSalesBusy=false}
   };
 }
+function glurAdjustmentEditor(s,ingredients){
+  if(!ingredients.length)return '<div class="hint">รายการนี้ไม่มีข้อมูลวัตถุดิบสำหรับปรับย้อนหลัง</div>';
+  const audit=glurAdjustments.filter(a=>a.sale_id===s.id).slice(0,10);
+  return `<div class="card" style="margin-top:10px;padding:12px"><strong>ปรับปริมาณที่ใช้จริง</strong>
+    <form data-glur-adjust-form="${s.id}" class="stack" style="margin-top:9px">
+      <div class="field"><label>วัตถุดิบ</label><select name="stock_id">${ingredients.map(i=>{const st=cloudStock.find(x=>x.id===i.stock_id);return `<option value="${i.stock_id}">${esc(st?.name||'วัตถุดิบ '+i.stock_id.slice(0,8))} (${num(i.quantity_used)} ${esc(st?.unit||'')})</option>`}).join('')}</select></div>
+      <div data-glur-old class="small muted"></div>
+      <div class="field"><label>ปริมาณที่ใช้จริง (รวมทั้งหมด ไม่ใช่ส่วนต่าง)</label><input name="new_quantity" type="number" min="0" step="any" required></div>
+      <div class="field"><label>เหตุผลที่แก้ไข</label><textarea name="reason" rows="2" maxlength="1000" required placeholder="เช่น เท RUM เกินสูตร 5 ml"></textarea></div>
+      <button type="submit" class="btn full">ยืนยันปรับสต๊อก</button>
+    </form>
+    ${audit.length?`<div class="small muted" style="margin-top:10px">ประวัติการปรับล่าสุด</div>${audit.map(a=>{const st=cloudStock.find(x=>x.id===a.stock_id);return `<div class="small muted" style="margin-top:6px">${esc(st?.name||'วัตถุดิบ')} ${num(a.quantity_before)} → ${num(a.quantity_after)} · ${esc(a.reason)} · ${esc(glurSaleDate(a.created_at))}</div>`}).join('')}`:''}
+  </div>`;
+}
 const glurSalesPreviousRender=render;
 render=function(){
   if(!currentUser)return;
@@ -594,7 +663,7 @@ render=function(){
 const glurSalesPreviousSetPage=setPage;
 setPage=function(p){glurSalesPreviousSetPage(p);if(p==='sales'){loadGlurSales();if(!recipeCloudReady)loadCloudRecipes()}};
 const glurSalesPreviousShowAuthenticated=showAuthenticated;
-showAuthenticated=function(user){glurSalesPreviousShowAuthenticated(user);loadGlurSales()};
+showAuthenticated=function(user){glurAdjustRole='';glurEditingSaleId=null;glurSalesPreviousShowAuthenticated(user);glurLoadAdjustmentAccess().then(()=>loadGlurSales())};
 
 initAuth();
 </script>
