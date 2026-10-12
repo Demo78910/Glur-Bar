@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#F47721">
+<meta name="theme-color" content="#17110e">
 <title>GLUR BAR — Stock & Sales</title>
 <style>
 :root{--bg:#FFF8F2;--panel:#FFFFFF;--panel2:#FFF0E5;--gold:#F47721;--gold2:#E96512;--text:#302820;--muted:#8A786B;--line:#F0D7C5;--red:#D83B32;--green:#278653}
@@ -65,11 +65,64 @@ input:focus,select:focus{border-color:var(--gold)}
 .auth-status{font-size:13px;margin:12px 0;color:var(--muted)}
 .auth-status.error{color:var(--red)}
 .account-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 12px;font-size:12px;color:var(--muted)}
+
+/* GLUR BAR — charcoal & ember compact redesign */
+:root{--bg:#0e0d0d;--panel:#1a1716;--panel2:#27201d;--gold:#f47721;--gold2:#ff9b54;--text:#f6eee8;--muted:#b4a69b;--line:#40312a;--red:#ff7567;--green:#65d39a}
+body{background:radial-gradient(ellipse at 70% -10%,#3b1d13 0%,transparent 45%),var(--bg);color:var(--text);font-size:14px}
+.top{background:linear-gradient(100deg,#21120d,#401e11 60%,#160f0c);padding:15px 18px;border-bottom:1px solid #643a27;box-shadow:0 5px 25px #0005}
+.brand{color:#ff9b54;font-size:27px;font-weight:950;letter-spacing:3px;text-shadow:0 2px 15px #f4772140}
+.sub{color:#d9a27d;letter-spacing:1.2px;font-size:10px}
+.wrap{max-width:1240px;padding:16px 12px 105px}
+.page-title{font-size:20px;margin:5px 0 12px;letter-spacing:.2px}
+.card{background:linear-gradient(140deg,#211b18,#171514);border-color:var(--line);border-radius:13px;padding:12px;box-shadow:0 5px 24px #0002}
+.metric{color:var(--gold2);font-size:22px}
+.section-title{font-size:15px;margin:15px 0 9px}
+input,select,textarea{background:#171514;color:var(--text);border:1px solid #504039;border-radius:9px;padding:10px}
+input::placeholder,textarea::placeholder{color:#89776d}
+.btn{background:linear-gradient(120deg,#e96a1d,#f99044);border-color:#ed7a33;color:#1a100b;padding:9px 12px}
+.btn.secondary{background:#29211e;color:#ffc096;border-color:#755039}
+.btn.danger{background:#35201e;color:#ff9588;border-color:#7d3b34}
+.nav{background:#181413;border-color:#473127;box-shadow:0 -6px 25px #0007}
+.nav button{color:#c0a99c;min-width:62px}
+.nav button.active{background:#bd4f19;color:#fff}
+.item{padding:9px 0;border-color:#3c2f29}
+.item-name{font-size:13px}
+.pill{border-color:#594036;color:#e0bca5}
+.hint{background:#302018;color:#e9bb9c;border-color:#f47721}
+.toast{background:#f9b27a;color:#251208}
+.account-bar{padding:5px 0 9px}
+.compact-toolbar{display:flex;gap:7px;align-items:center;margin-bottom:9px}
+.compact-toolbar input{flex:1}
+.chip-row{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;scrollbar-width:thin}
+.chip{white-space:nowrap;border:1px solid #544037;background:#241c19;color:#d8c0b0;border-radius:8px;padding:7px 10px;font-size:12px}
+.chip.active{background:#d86520;border-color:#f18c4c;color:#fff}
+.stock-entry{width:100%;display:flex;align-items:center;justify-content:space-between;gap:9px;border:0;border-bottom:1px solid #3c2f29;background:transparent;color:inherit;padding:11px 2px;text-align:left}
+.stock-entry:last-child{border-bottom:0}
+.stock-entry:hover,.recipe-tile:hover{background:#2a201c}
+.stock-entry .right{text-align:right;white-space:nowrap}
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px}
+.status-dot.low{background:#ff8d42}.status-dot.out{background:var(--red)}
+.back-link{border:0;background:none;color:#ffa266;padding:4px 0 12px;font-weight:700}
+.detail-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.detail-head h2{margin:0;font-size:21px}
+.detail-value{font-size:29px;font-weight:800;color:#ff9a53}
+.detail-sub{font-size:12px;color:var(--muted)}
+.recipe-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.recipe-tile{border:1px solid #463126;border-radius:13px;overflow:hidden;background:#211916;color:var(--text);text-align:left;padding:0}
+.recipe-cover{height:115px;background:linear-gradient(135deg,#683018,#24140e);display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden}
+.recipe-cover img{width:100%;height:100%;object-fit:cover}
+.recipe-info{padding:9px}.recipe-info strong{display:block;font-size:13px}.recipe-info small{color:#c9a994}
+.kpi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}
+.kpi{padding:10px 8px;border:1px solid #48332a;background:#261e1a;border-radius:10px;min-width:0}
+.kpi small{display:block;color:#bda99b;font-size:10px}.kpi strong{font-size:16px;overflow-wrap:anywhere}
+.image-slot{height:200px;background:linear-gradient(135deg,#5b2b19,#1c1411);border-radius:12px;display:flex;align-items:center;justify-content:center;color:#e4b08a;overflow:hidden}
+.image-slot img{width:100%;height:100%;object-fit:cover}
+@media(min-width:850px){.wrap{padding-left:190px;padding-right:22px}.nav{top:92px;bottom:0;right:auto;width:172px;flex-direction:column;justify-content:flex-start;overflow-y:auto;padding:15px 9px}.nav button{display:flex;align-items:center;text-align:left;font-size:13px;gap:9px;padding:12px}.nav button span{font-size:19px;margin:0}.recipe-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.recipe-cover{height:155px}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
-<header class="top"><div class="brand">GLUR BAR</div><div class="sub">STOCK · RECIPES · SALES · REPORTS</div></header>
+<header class="top"><div class="brand">GLUR <span style="font-size:12px;letter-spacing:5px">BAR</span></div><div class="sub">STOCK · RECIPES · SALES · REPORTS</div></header>
 <main class="wrap" id="app"></main>
 <nav class="nav" id="nav">
 <button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="settings"><span>⚙</span>สำรอง</button>
@@ -173,7 +226,7 @@ function showForgotPassword(){
 }
 function authScreen(message='',isError=false){
   document.getElementById('nav').classList.add('hidden');
-  document.getElementById('app').innerHTML=`<div class="auth-screen"><div class="card"><h2>เข้าสู่ระบบ GLUR BAR</h2><div class="small muted">STAFF LOGIN · เข้าสู่ระบบด้วย ID และรหัสผ่าน</div><form id="authForm" class="stack"><div class="field"><label>ID ผู้ใช้งาน</label><input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-z0-9_]{3,30}" placeholder="เช่น owner001" required></div><div class="field"><label>รหัสผ่าน</label><input name="password" type="password" autocomplete="current-password" required></div><button id="authSubmit" type="submit" class="btn full">เข้าสู่ระบบ</button></form><button class="btn secondary full" id="forgotPasswordBtn" type="button" style="margin-top:8px">ลืมรหัสผ่าน / ตั้งรหัสผ่านใหม่</button><div id="authStatus" class="auth-status${isError?' error':''}" role="status">${esc(message)}</div><div class="hint">เจ้าของร้านเป็นผู้สร้างบัญชีพนักงาน ไม่มีการสมัครสมาชิกเอง · ข้อมูลสต๊อกและยอดขายยังเก็บในเบราว์เซอร์เครื่องนี้ ไม่ได้ซิงก์ข้ามเครื่อง</div></div></div>`;
+  document.getElementById('app').innerHTML=`<div class="auth-screen"><div class="card"><h2>เข้าสู่ระบบ GLUR BAR</h2><div class="small muted">STAFF LOGIN · เข้าสู่ระบบด้วย ID และรหัสผ่าน</div><form id="authForm" class="stack"><div class="field"><label>ID ผู้ใช้งาน</label><input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-z0-9_]{3,30}" placeholder="เช่น owner001" required></div><div class="field"><label>รหัสผ่าน</label><input name="password" type="password" autocomplete="current-password" required></div><button id="authSubmit" type="submit" class="btn full">เข้าสู่ระบบ</button></form><button class="btn secondary full" id="forgotPasswordBtn" type="button" style="margin-top:8px">ลืมรหัสผ่าน / ตั้งรหัสผ่านใหม่</button><div id="authStatus" class="auth-status${isError?' error':''}" role="status">${esc(message)}</div><div class="hint">เจ้าของร้านเป็นผู้สร้างบัญชีพนักงาน ไม่มีการสมัครสมาชิกเอง · สต๊อกใช้ Supabase ออนไลน์ ส่วนสูตรและยอดขายเดิมยังอยู่ในเบราว์เซอร์</div></div></div>`;
   document.getElementById('forgotPasswordBtn').onclick=showForgotPassword;
   document.getElementById('authForm').onsubmit=async e=>{
     e.preventDefault();
@@ -231,6 +284,64 @@ glurSupabase.auth.onAuthStateChange((event,session)=>{
   if(event==='SIGNED_OUT'){currentUser=null;authScreen()}
   else if(event==='SIGNED_IN'&&session?.user&&currentUser?.id!==session.user.id)showAuthenticated(session.user);
 });
+
+// Compact GLUR BAR interface. Stock is cloud-backed; recipes remain read-only local legacy data.
+let stockMainFilter='all',stockSubFilter='all',stockSearch='',stockDetailId=null,stockEditing=false;
+let recipeSearch='',recipeDetailId=null;
+const glurCategories=[{id:'liquor',label:'เหล้า',subs:['ทั้งหมด','Gin','Vodka','Rum','Whisky','Tequila','Liqueur','Brandy','Vermouth','Bitters','Thai Spirits','อื่น ๆ']},{id:'mixer',label:'มิกเซอร์',subs:['ทั้งหมด','Syrup','Juice','Soda','Tonic','อื่น ๆ']},{id:'fresh',label:'ของสด',subs:['ทั้งหมด','ผลไม้','สมุนไพร','อื่น ๆ']},{id:'other',label:'อื่น ๆ',subs:['ทั้งหมด']}];
+function inferStockCategory(x){
+ const n=String(x.name||'').toLowerCase();
+ const lookup=[['Gin',/\bgin\b|tanqueray|roku|gilbey/],['Vodka',/vodka|absolut|kulov|silver wolf/],['Rum',/\brum\b|bacardi|bacadi|havana|chalong bay|dead man/],['Whisky',/whisk|whiskey|jameson|jim beam|jimbeam/],['Tequila',/tequila|818 blanco|818 reposado/],['Vermouth',/cinzano|vermouth/],['Bitters',/campari|angostura|bitters/],['Brandy',/brandy|cognac/],['Thai Spirits',/mekhong|sangsom|ยาดอง|แม่โขง|แสงโสม/],['Liqueur',/midori|peachtree|triple sec|d\.o\.m|liqueur|de kuyper|hiram walker/]];
+ for(const [sub,re] of lookup)if(re.test(n))return {main:'liquor',sub};
+ if(/syrup|monin|hale|ไซรัป|น้ำเชื่อม/.test(n))return {main:'mixer',sub:'Syrup'};
+ if(/juice|tipco|doikham|น้ำผลไม้/.test(n))return {main:'mixer',sub:'Juice'};
+ if(/tonic/.test(n))return {main:'mixer',sub:'Tonic'};
+ if(/soda|โซดา/.test(n))return {main:'mixer',sub:'Soda'};
+ if(/lime|lemon|orange|pineapple|มะนาว|ส้ม|สับปะรด|แตงกวา|มะม่วง/.test(n))return {main:'fresh',sub:'ผลไม้'};
+ if(/mint|pandan|rosemary|ginger|ตะไคร้|ใบเตย|ขิง|ผักชี|สมุนไพร/.test(n))return {main:'fresh',sub:'สมุนไพร'};
+ return {main:'other',sub:'อื่น ๆ'};
+}
+function renderStock(){
+ if(!cloudReady){shell('สต๊อกวัตถุดิบ',`<div class="card">${cloudError?`<div class="warn">${esc(cloudError)}</div><button class="btn" onclick="loadCloudStock()">ลองใหม่</button>`:'กำลังโหลดสต๊อกออนไลน์…'}</div>`);return}
+ if(stockDetailId){renderStockDetail();return}
+ const main=glurCategories.find(x=>x.id===stockMainFilter)||glurCategories[0];
+ const filtered=cloudStock.filter(x=>{const c=inferStockCategory(x);return (stockMainFilter==='all'||c.main===stockMainFilter)&&(stockSubFilter==='all'||c.sub===stockSubFilter)&&x.name.toLowerCase().includes(stockSearch.toLowerCase())});
+ const lows=cloudStock.filter(x=>num(x.quantity)<=num(x.min_quantity)).length;
+ shell('สต๊อกวัตถุดิบ',`<div class="compact-toolbar"><input id="stockSearch" placeholder="⌕ ค้นหาวัตถุดิบ..." value="${esc(stockSearch)}"><button class="btn secondary smallbtn" onclick="loadCloudStock()">↻</button><button class="btn smallbtn" onclick="openStockCreate()">＋ เพิ่ม</button></div><div class="chip-row">${[{id:'all',label:'ทั้งหมด'},...glurCategories].map(c=>`<button class="chip ${stockMainFilter===c.id?'active':''}" data-main="${c.id}">${c.label}</button>`).join('')}</div>${stockMainFilter!=='all'?`<div class="chip-row">${main.subs.map(t=>`<button class="chip ${stockSubFilter===(t==='ทั้งหมด'?'all':t)?'active':''}" data-sub="${esc(t==='ทั้งหมด'?'all':t)}">${esc(t)}</button>`).join('')}</div>`:''}<div class="row between small muted" style="margin:4px 0 10px"><span>แสดง ${filtered.length} จาก ${cloudStock.length} รายการ</span><span class="${lows?'warn':''}">${lows} รายการใกล้หมด</span></div><div class="card" style="padding:4px 12px">${filtered.length?filtered.map(x=>{const low=num(x.quantity)<=num(x.min_quantity),out=num(x.quantity)<=0,c=inferStockCategory(x);return `<button class="stock-entry" data-stock="${x.id}"><div style="min-width:0"><div class="item-name">${esc(x.name)}</div><div class="small muted">${esc(c.sub)} · ${money(x.cost_per_unit)}/${esc(x.unit)}</div></div><div class="right"><strong>${num(x.quantity).toLocaleString('th-TH')} ${esc(x.unit)}</strong><div class="small ${low?'warn':'good'}"><span class="status-dot ${out?'out':low?'low':''}"></span>${out?'หมด':low?'ใกล้หมด':'ปกติ'} &nbsp;›</div></div></button>`}).join(''):empty('ไม่พบรายการในหมวดนี้')}</div><div class="small muted">หมวดหมู่ในเวอร์ชันนี้จัดให้อัตโนมัติจากชื่อวัตถุดิบ ยังไม่ได้บันทึกหมวดลงฐานข้อมูล</div>`);
+ document.getElementById('stockSearch').oninput=e=>{stockSearch=e.target.value;const pos=e.target.selectionStart;renderStock();const inp=document.getElementById('stockSearch');inp.focus();inp.setSelectionRange(pos,pos)};
+ document.querySelectorAll('[data-main]').forEach(b=>b.onclick=()=>{stockMainFilter=b.dataset.main;stockSubFilter='all';renderStock()});
+ document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{stockSubFilter=b.dataset.sub;renderStock()});
+ document.querySelectorAll('[data-stock]').forEach(b=>b.onclick=()=>{stockDetailId=b.dataset.stock;stockEditing=false;renderStock()});
+}
+function openStockCreate(){stockDetailId='new';stockEditing=true;renderStock()}
+function renderStockDetail(){
+ const fresh=stockDetailId==='new',x=fresh?{name:'',quantity:0,unit:'ml',cost_per_unit:0,min_quantity:0}:cloudStock.find(x=>x.id===stockDetailId);
+ if(!x){stockDetailId=null;renderStock();return}
+ const edit=fresh||stockEditing,c=inferStockCategory(x);
+ shell(fresh?'เพิ่มวัตถุดิบ':'รายละเอียดวัตถุดิบ',`<button class="back-link" id="stockBack">‹ กลับไปสต๊อก</button><div class="card"><div class="detail-head"><div><h2>${fresh?'วัตถุดิบใหม่':esc(x.name)}</h2>${!fresh?`<span class="pill">${esc(c.sub)}</span>`:''}</div>${!edit?`<button class="btn secondary smallbtn" id="stockEdit">✎ แก้ไข</button>`:''}</div>${edit?`<form id="stockDetailForm" class="stack" style="margin-top:15px"><div class="field"><label>ชื่อวัตถุดิบ</label><input name="name" maxlength="150" required value="${esc(x.name)}"></div><div class="formgrid"><div class="field"><label>จำนวนคงเหลือ</label><input name="quantity" type="number" min="0" step="any" required value="${num(x.quantity)}"></div><div class="field"><label>หน่วย</label><select name="unit">${['ml','g','ชิ้น','ขวด','ถุง','หน่วย'].map(u=>`<option ${u===x.unit?'selected':''}>${u}</option>`).join('')}</select></div><div class="field"><label>ต้นทุนต่อหน่วย (บาท)</label><input name="cost_per_unit" type="number" min="0" step="any" required value="${num(x.cost_per_unit)}"></div><div class="field"><label>แจ้งเตือนเมื่อเหลือ</label><input name="min_quantity" type="number" min="0" step="any" required value="${num(x.min_quantity)}"></div></div><div class="actions"><button class="btn" type="submit">บันทึกข้อมูล</button><button class="btn secondary" type="button" id="stockCancel">ยกเลิก</button></div></form>`:`<div class="detail-value" style="margin-top:18px">${num(x.quantity).toLocaleString('th-TH')} ${esc(x.unit)}</div><div class="detail-sub">จำนวนคงเหลือออนไลน์</div><div class="kpi-grid"><div class="kpi"><small>ต้นทุนต่อหน่วย</small><strong>${money(x.cost_per_unit)}</strong></div><div class="kpi"><small>มูลค่าคงเหลือ</small><strong>${money(num(x.quantity)*num(x.cost_per_unit))}</strong></div><div class="kpi"><small>แจ้งเตือนที่</small><strong>${num(x.min_quantity)} ${esc(x.unit)}</strong></div></div><div class="small muted">หมวดแสดงอัตโนมัติจากชื่อ · ข้อมูลจาก Supabase</div><div class="actions" style="margin-top:16px"><button class="btn danger smallbtn" id="stockDelete">ลบรายการ</button></div>`}</div>`);
+ document.getElementById('stockBack').onclick=()=>{stockDetailId=null;stockEditing=false;renderStock()};
+ if(!edit){document.getElementById('stockEdit').onclick=()=>{stockEditing=true;renderStock()};document.getElementById('stockDelete').onclick=()=>deleteCloudStock(x.id);return}
+ document.getElementById('stockCancel').onclick=()=>{if(fresh)stockDetailId=null;stockEditing=false;renderStock()};
+ document.getElementById('stockDetailForm').onsubmit=async e=>{e.preventDefault();const button=e.target.querySelector('[type=submit]');button.disabled=true;const d=new FormData(e.target),payload={name:String(d.get('name')||'').trim(),quantity:Number(d.get('quantity')),unit:String(d.get('unit')),cost_per_unit:Number(d.get('cost_per_unit')),min_quantity:Number(d.get('min_quantity'))};if(!payload.name||[payload.quantity,payload.cost_per_unit,payload.min_quantity].some(v=>!Number.isFinite(v)||v<0)){toast('ตรวจสอบข้อมูลอีกครั้ง');button.disabled=false;return}const q=fresh?glurSupabase.from('glur_stock').insert({...payload,shop_id:GLUR_SHOP_ID}).select('id').single():glurSupabase.from('glur_stock').update(payload).eq('id',x.id).eq('shop_id',GLUR_SHOP_ID).select('id').single();const {data,error}=await q;if(error||!data){toast('บันทึกไม่สำเร็จ: '+(error?.message||'ไม่มีสิทธิ์แก้ไข'));button.disabled=false;return}stockDetailId=data.id;stockEditing=false;toast('บันทึกสต๊อกออนไลน์แล้ว');await loadCloudStock();renderStock()};
+}
+// Preserve cloud read and RLS. Clear deleted-detail selection only after a confirmed deletion.
+const originalDeleteCloudStock=deleteCloudStock;
+deleteCloudStock=async function(sid){const x=cloudStock.find(y=>y.id===sid);if(!x||!confirm('ลบ '+x.name+' จากสต๊อกออนไลน์หรือไม่?'))return;const {data,error}=await glurSupabase.from('glur_stock').delete().eq('id',sid).eq('shop_id',GLUR_SHOP_ID).select('id');if(error||!data?.length){toast('ลบไม่สำเร็จ: '+(error?.message||'ไม่มีสิทธิ์ลบ'));return}stockDetailId=null;toast('ลบสต๊อกออนไลน์แล้ว');await loadCloudStock()};
+function renderRecipes(){
+ if(recipeDetailId){renderRecipeDetail();return}
+ const list=db.recipes.filter(r=>r.name.toLowerCase().includes(recipeSearch.toLowerCase()));
+ shell('สูตรเครื่องดื่ม',`<div class="hint">สูตรในหน้านี้เป็นข้อมูลเดิมของเบราว์เซอร์ ยังไม่ซิงก์กับ Supabase และยังไม่เปิดแก้ไขเพื่อป้องกันข้อมูลสต๊อกไม่ตรงกัน</div><div class="compact-toolbar"><input id="recipeSearch" placeholder="⌕ ค้นหาสูตรเครื่องดื่ม..." value="${esc(recipeSearch)}"></div><div class="row between small muted" style="margin-bottom:10px"><span>${list.length} สูตร</span><span>โหมดดูข้อมูล</span></div><div class="recipe-grid">${list.map(r=>`<button class="recipe-tile" data-recipe="${esc(r.id)}"><div class="recipe-cover">${r.imageUrl?`<img src="${esc(r.imageUrl)}" alt="${esc(r.name)}">`:'🍸'}</div><div class="recipe-info"><strong>${esc(r.name)}</strong><small>${(r.ingredients||[]).length} ส่วนผสม</small><div class="row between" style="margin-top:6px"><span class="small muted">ต้นทุน ${money(recipeCost(r))}</span><strong>${money(r.price)}</strong></div></div></button>`).join('')}</div>${!list.length?empty('ยังไม่มีสูตรในข้อมูลเดิม'):''}`);
+ document.getElementById('recipeSearch').oninput=e=>{recipeSearch=e.target.value;const pos=e.target.selectionStart;renderRecipes();const inp=document.getElementById('recipeSearch');inp.focus();inp.setSelectionRange(pos,pos)};
+ document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>{recipeDetailId=b.dataset.recipe;renderRecipes()});
+}
+function renderRecipeDetail(){const r=db.recipes.find(x=>x.id===recipeDetailId);if(!r){recipeDetailId=null;renderRecipes();return}const cost=recipeCost(r),profit=num(r.price)-cost;
+ shell('รายละเอียดสูตร',`<button class="back-link" id="recipeBack">‹ กลับไปสูตรทั้งหมด</button><div class="card"><div class="image-slot">${r.imageUrl?`<img src="${esc(r.imageUrl)}" alt="${esc(r.name)}">`:'🍸 ไม่มีรูปภาพสูตรในข้อมูลเดิม'}</div><div class="detail-head" style="margin-top:13px"><div><h2>${esc(r.name)}</h2><div class="small muted">${esc(r.note||'ยังไม่มีคำอธิบาย')}</div></div><span class="pill">อ่านอย่างเดียว</span></div><div class="kpi-grid"><div class="kpi"><small>ราคาขาย</small><strong>${money(r.price)}</strong></div><div class="kpi"><small>ต้นทุน</small><strong>${money(cost)}</strong></div><div class="kpi"><small>กำไรขั้นต้น</small><strong>${money(profit)}</strong></div></div><div class="section-title">ส่วนผสมต่อ 1 แก้ว</div>${(r.ingredients||[]).map(ing=>{const s=stockById(ing.stockId);return `<div class="tableline"><span>${esc(s?.name||'วัตถุดิบเดิมไม่พบ')} <span class="small muted">${num(ing.qty)} ${esc(s?.unit||'')}</span></span><strong>${s?money(num(ing.qty)*num(s.cost)):'—'}</strong></div>`}).join('')||empty('ยังไม่มีส่วนผสม')}<div class="section-title">วิธีทำ · Method</div><div class="small muted">${esc(r.method||'ยังไม่ได้บันทึกวิธีทำ')}</div><div class="section-title">การตกแต่ง · Garnish</div><div class="small muted">${esc(r.garnish||'ยังไม่ได้บันทึก')}</div><div class="section-title">แก้วที่ใช้ · Glassware</div><div class="small muted">${esc(r.glassware||'ยังไม่ได้บันทึก')}</div></div><div class="hint">การเพิ่มรูปภาพและแก้ไขรายละเอียดสูตรออนไลน์ต้องสร้างระบบเก็บสูตรและรูปภาพใน Supabase ก่อน เพื่อให้ทุกเครื่องเห็นตรงกัน</div>`);
+ document.getElementById('recipeBack').onclick=()=>{recipeDetailId=null;renderRecipes()};
+}
+// Prevent read-only hint from disabling navigation inside the recipe detail view.
+const originalRender=render;
+render=function(){if(!currentUser)return;if(page==='stock'){renderStock();return}if(page==='recipes'){renderRecipes();return}originalRender()};
+
 initAuth();
 </script>
 </body>
