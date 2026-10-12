@@ -379,7 +379,7 @@ function renderRecipeDetail(){const r=db.recipes.find(x=>x.id===recipeDetailId);
 }
 // Prevent read-only hint from disabling navigation inside the recipe detail view.
 const originalRender=render;
-render=function(){if(!currentUser)return;if(page==='stock'){renderStock();return}if(page==='recipes'){renderRecipes();return}originalRender()};
+render=function(){if(!currentUser)return;if(page==='stock'){renderStock();return}if(page==='recipes'){renderRecipes();return}if(page==='receiving'){renderReceiving();return}originalRender()};
 
 // GLUR BAR cloud recipes: online data only, sales and receiving remain disabled.
 let cloudRecipes=[],recipeCloudError='',recipeCloudReady=false,recipeEditMode=false;
@@ -436,6 +436,52 @@ const glurOldSetPage=setPage;
 setPage=function(p){glurOldSetPage(p);if(p==='recipes'&&!recipeCloudReady)loadCloudRecipes()};
 const glurOldLoadCloudStock=loadCloudStock;
 loadCloudStock=async function(){await glurOldLoadCloudStock();if(currentUser&&page==='recipes')renderRecipes()};
+
+
+// Cloud receiving — one atomic RPC updates stock and inserts the receipt.
+let cloudReceipts=[],receiptsReady=false,receiptsError='',receivingBusy=false;
+async function loadCloudReceipts(){
+  receiptsError='';
+  const {data,error}=await glurSupabase.from('glur_stock_receipts')
+    .select('id,shop_id,stock_id,quantity,total_cost,received_at,created_by,created_at')
+    .eq('shop_id',GLUR_SHOP_ID).order('received_at',{ascending:false}).limit(100);
+  if(error){receiptsError=error.message;receiptsReady=false}
+  else{cloudReceipts=data||[];receiptsReady=true}
+  if(currentUser&&page==='receiving')renderReceiving();
+}
+function renderReceiving(){
+  if(!cloudReady){shell('รับวัตถุดิบเข้า',`<div class="card">${cloudError?esc(cloudError):'กำลังโหลดสต๊อกออนไลน์…'}</div>`);return}
+  const stockOptions=cloudStock.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} (${esc(s.unit)})</option>`).join('');
+  const history=cloudReceipts.map(r=>{const s=cloudStock.find(x=>x.id===r.stock_id);const date=r.received_at?new Date(r.received_at).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}):'—';return `<div class="item"><div style="min-width:0"><div class="item-name">${esc(s?.name||'วัตถุดิบที่ลบไปแล้ว')}</div><div class="small muted">${esc(date)} · รับเข้า ${num(r.quantity).toLocaleString('th-TH')} ${esc(s?.unit||'หน่วย')}</div></div><strong>${money(r.total_cost)}</strong></div>`}).join('');
+  shell('รับวัตถุดิบเข้า · ออนไลน์',`<div class="hint">บันทึกผ่าน Supabase โดยเพิ่มจำนวนสต๊อก คำนวณต้นทุนเฉลี่ย และเก็บประวัติพร้อมกัน · สิทธิ์ Owner / Manager</div><div class="card"><div class="section-title" style="margin-top:0">รับของเข้า</div><form id="cloudReceiveForm" class="stack"><div class="field"><label>เลือกวัตถุดิบ</label><select name="stock_id" required>${stockOptions}</select></div><div id="receiveStockInfo" class="small muted"></div><div class="formgrid"><div class="field"><label>จำนวนรับเข้า (ตามหน่วยสต๊อก)</label><input name="quantity" type="number" min="0.000001" step="any" required placeholder="เช่น 1400"></div><div class="field"><label>ราคารวมที่ซื้อ (บาท)</label><input name="total_cost" type="number" min="0" step="any" required placeholder="เช่น 1498"></div></div><div id="receivePreview" class="hint">ระบุจำนวนและราคารวมเพื่อดูต้นทุนต่อหน่วย</div><button class="btn full" type="submit" ${!cloudStock.length||receivingBusy?'disabled':''}>${receivingBusy?'กำลังบันทึก…':'บันทึกรับเข้าออนไลน์'}</button></form></div><div class="row between"><div class="section-title">ประวัติรับเข้าล่าสุด</div><button id="refreshReceipts" class="btn secondary smallbtn">↻ รีเฟรช</button></div>${receiptsError?`<div class="hint warn">โหลดประวัติไม่ได้: ${esc(receiptsError)}</div>`:''}<div class="card">${!receiptsReady&&!receiptsError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติรับเข้า')}</div><div class="small muted">แสดงประวัติล่าสุด 100 รายการ · วันที่และเวลาอ้างอิงเวลาบันทึกบนเซิร์ฟเวอร์</div>`);
+  document.getElementById('refreshReceipts').onclick=loadCloudReceipts;
+  const form=document.getElementById('cloudReceiveForm');
+  const update=()=>{
+    const s=cloudStock.find(x=>x.id===form.elements.stock_id.value);
+    document.getElementById('receiveStockInfo').textContent=s?`คงเหลือ ${num(s.quantity).toLocaleString('th-TH')} ${s.unit} · ต้นทุนเดิม ${money(s.cost_per_unit)}/${s.unit}`:'';
+    const q=Number(form.elements.quantity.value),cost=Number(form.elements.total_cost.value);
+    document.getElementById('receivePreview').textContent=s&&form.elements.quantity.value!==''&&form.elements.total_cost.value!==''&&q>0&&cost>=0?`ต้นทุนรับเข้าต่อ ${s.unit}: ${money(cost/q)} · คงเหลือหลังรับเข้า (ประมาณ): ${(num(s.quantity)+q).toLocaleString('th-TH')} ${s.unit}`:'ระบุจำนวนและราคารวมเพื่อดูต้นทุนต่อหน่วย';
+  };
+  form.oninput=update;form.elements.stock_id.onchange=update;update();
+  form.onsubmit=async e=>{
+    e.preventDefault();if(receivingBusy)return;
+    const sid=form.elements.stock_id.value,q=Number(form.elements.quantity.value),cost=Number(form.elements.total_cost.value),s=cloudStock.find(x=>x.id===sid);
+    if(!s||!Number.isFinite(q)||q<=0||!Number.isFinite(cost)||cost<0){toast('ตรวจสอบจำนวนและราคารวม');return}
+    if(!confirm(`ยืนยันรับ ${s.name} เพิ่ม ${q} ${s.unit} ราคารวม ${money(cost)}?`))return;
+    receivingBusy=true;const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='กำลังบันทึก…';
+    try{
+      const {error}=await glurSupabase.rpc('glur_receive_stock',{p_shop_id:GLUR_SHOP_ID,p_stock_id:sid,p_quantity:q,p_total_cost:cost});
+      if(error)throw error;
+      toast('รับสต๊อกออนไลน์สำเร็จ');
+      await Promise.all([loadCloudStock(),loadCloudReceipts()]);
+    }catch(err){toast('รับเข้าไม่สำเร็จ: '+(err.message||err))}
+    finally{receivingBusy=false;if(currentUser&&page==='receiving')renderReceiving()}
+  };
+}
+const glurReceiveOldSetPage=setPage;
+setPage=function(p){glurReceiveOldSetPage(p);if(p==='receiving')loadCloudReceipts()};
+const glurReceiveOldShowAuthenticated=showAuthenticated;
+showAuthenticated=function(user){glurReceiveOldShowAuthenticated(user);loadCloudReceipts()};
 
 initAuth();
 </script>
