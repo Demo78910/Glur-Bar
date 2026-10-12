@@ -342,6 +342,62 @@ function renderRecipeDetail(){const r=db.recipes.find(x=>x.id===recipeDetailId);
 const originalRender=render;
 render=function(){if(!currentUser)return;if(page==='stock'){renderStock();return}if(page==='recipes'){renderRecipes();return}originalRender()};
 
+// GLUR BAR cloud recipes: online data only, sales and receiving remain disabled.
+let cloudRecipes=[],recipeCloudError='',recipeCloudReady=false,recipeEditMode=false;
+const recipeFields=['name','selling_price','category','description','method','technique','glassware','garnish','notes','image_path'];
+function recipeImage(r){const p=String(r.image_path||'');if(!p)return '';if(/^https:\/\//i.test(p))return p;if(p.includes('..')||p.startsWith('/'))return '';return glurSupabase.storage.from('glur-recipe-images').getPublicUrl(p).data.publicUrl}
+function cloudRecipeCost(r){return (r.ingredients||[]).reduce((a,i)=>{const s=cloudStock.find(x=>x.id===i.stock_id);return a+(s?num(i.quantity)*num(s.cost_per_unit):0)},0)}
+async function loadCloudRecipes(){recipeCloudError='';const {data,error}=await glurSupabase.from('glur_recipes').select('id,shop_id,name,selling_price,category,description,method,technique,glassware,garnish,notes,image_path,created_at').eq('shop_id',GLUR_SHOP_ID).order('created_at',{ascending:false});if(error){recipeCloudError=error.message;recipeCloudReady=false}else{const {data:ings,error:ie}=await glurSupabase.from('glur_recipe_ingredients').select('shop_id,recipe_id,stock_id,quantity').eq('shop_id',GLUR_SHOP_ID);if(ie){recipeCloudError=ie.message;recipeCloudReady=false}else{cloudRecipes=(data||[]).map(r=>({...r,ingredients:(ings||[]).filter(i=>i.recipe_id===r.id)}));recipeCloudReady=true}}if(currentUser&&page==='recipes')renderRecipes()}
+function renderRecipes(){
+ if(recipeDetailId){renderRecipeDetail();return}
+ const list=cloudRecipes.filter(r=>String(r.name).toLowerCase().includes(recipeSearch.toLowerCase()));
+ shell('สูตรเครื่องดื่ม',`<div class="compact-toolbar"><input id="recipeSearch" placeholder="⌕ ค้นหาสูตรเครื่องดื่ม..." value="${esc(recipeSearch)}"><button class="btn secondary smallbtn" id="recipeRefresh">↻</button><button class="btn smallbtn" id="recipeCreate">＋ เพิ่มสูตร</button></div>${recipeCloudError?`<div class="hint warn">โหลดสูตรไม่สำเร็จ: ${esc(recipeCloudError)}</div>`:''}<div class="row between small muted" style="margin-bottom:10px"><span>${list.length} สูตรออนไลน์</span><span>Supabase</span></div><div class="recipe-grid">${list.map(r=>`<button class="recipe-tile" data-recipe="${r.id}"><div class="recipe-cover">${recipeImage(r)?`<img src="${esc(recipeImage(r))}" alt="${esc(r.name)}">`:'🍸'}</div><div class="recipe-info"><strong>${esc(r.name)}</strong><small>${(r.ingredients||[]).length} ส่วนผสม · ${esc(r.category||'Classic')}</small><div class="row between" style="margin-top:6px"><span class="small muted">ต้นทุน ${money(cloudRecipeCost(r))}</span><strong>${money(r.selling_price)}</strong></div></div></button>`).join('')}</div>${!list.length?empty(recipeCloudReady?'ยังไม่มีสูตรออนไลน์ กด + เพิ่มสูตร เพื่อเริ่มต้น':'กำลังโหลดสูตรออนไลน์…'):''}<div class="hint">สูตรออนไลน์ใช้วัตถุดิบจากสต๊อก Supabase · เมนูขายและรับเข้ายังปิดบันทึกชั่วคราว</div>`);
+ document.getElementById('recipeSearch').oninput=e=>{recipeSearch=e.target.value;const pos=e.target.selectionStart;renderRecipes();const inp=document.getElementById('recipeSearch');inp.focus();inp.setSelectionRange(pos,pos)};
+ document.getElementById('recipeRefresh').onclick=loadCloudRecipes;
+ document.getElementById('recipeCreate').onclick=()=>{recipeDetailId='new';recipeEditMode=true;renderRecipes()};
+ document.querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>{recipeDetailId=b.dataset.recipe;recipeEditMode=false;renderRecipes()});
+}
+function renderRecipeDetail(){
+ const fresh=recipeDetailId==='new',r=fresh?{name:'',selling_price:0,category:'Classic',description:'',method:'',technique:'',glassware:'',garnish:'',notes:'',image_path:'',ingredients:[]}:cloudRecipes.find(x=>x.id===recipeDetailId);
+ if(!r){recipeDetailId=null;renderRecipes();return}
+ const edit=fresh||recipeEditMode,cost=cloudRecipeCost(r),profit=num(r.selling_price)-cost;
+ const ingList=(r.ingredients||[]).map(i=>{const s=cloudStock.find(x=>x.id===i.stock_id);return `<div class="tableline"><span>${esc(s?.name||'ไม่พบวัตถุดิบ')} · ${num(i.quantity)} ${esc(s?.unit||'')}</span><strong>${s?money(num(i.quantity)*num(s.cost_per_unit)):'—'}</strong></div>`}).join('');
+ const field=(key,label,kind='input')=>`<div class="field"><label>${label}</label>${kind==='textarea'?`<textarea name="${key}" rows="3">${esc(r[key]||'')}</textarea>`:`<input name="${key}" ${key==='name'?'required maxlength="150"':''} ${key==='selling_price'?'type="number" min="0" step="any" required':''} value="${esc(r[key]??'')}">`}</div>`;
+ shell(fresh?'เพิ่มสูตรใหม่':'รายละเอียดสูตร',`<button class="back-link" id="recipeBack">‹ กลับไปสูตรทั้งหมด</button><div class="card">${!edit?`<div class="image-slot">${recipeImage(r)?`<img src="${esc(recipeImage(r))}" alt="${esc(r.name)}">`:'🍸 ยังไม่มีรูปสูตร'}</div><div class="detail-head" style="margin-top:12px"><div><h2>${esc(r.name)}</h2><div class="small muted">${esc(r.category||'Classic')} · ${esc(r.description||'')}</div></div><button class="btn smallbtn" id="recipeEdit">✎ แก้ไข</button></div><div class="kpi-grid"><div class="kpi"><small>ราคาขาย</small><strong>${money(r.selling_price)}</strong></div><div class="kpi"><small>ต้นทุน</small><strong>${money(cost)}</strong></div><div class="kpi"><small>กำไรขั้นต้น</small><strong>${money(profit)}</strong></div></div><div class="section-title">ส่วนผสมต่อแก้ว</div>${ingList||empty('ยังไม่มีส่วนผสม')}<div class="section-title">วิธีทำ · Method</div><div style="white-space:pre-wrap">${esc(r.method||'—')}</div><div class="section-title">เทคนิค · Technique</div><div>${esc(r.technique||'—')}</div><div class="section-title">Garnish / Glassware</div><div>${esc(r.garnish||'—')} · ${esc(r.glassware||'—')}</div><div class="section-title">หมายเหตุ</div><div style="white-space:pre-wrap">${esc(r.notes||'—')}</div>`:`<form id="recipeCloudForm" class="stack">${field('name','ชื่อเมนู')}${field('selling_price','ราคาขาย (บาท)')}<div class="formgrid">${field('category','หมวดหมู่ เช่น Signature / Classic / Ya Dong')}${field('glassware','แก้วที่ใช้ · Glassware')}${field('technique','เทคนิค · Technique')}</div>${field('description','คำอธิบาย / คาแรกเตอร์เครื่องดื่ม','textarea')}${field('method','วิธีทำ · Method','textarea')}${field('garnish','การตกแต่ง · Garnish','textarea')}${field('notes','หมายเหตุบาร์เทนเดอร์','textarea')}<div class="hint">รูปภาพ: ระบบอัปโหลด Supabase Storage จะเพิ่มในขั้นถัดไป ช่องนี้รับเฉพาะ URL รูปภาพ HTTPS ที่คุณมีอยู่แล้ว</div>${field('image_path','URL รูปภาพ (ไม่บังคับ)')}<div class="section-title">ส่วนผสมต่อ 1 แก้ว</div><div id="cloudIngredientRows"></div><button type="button" class="btn secondary" id="recipeAddIng">＋ เพิ่มส่วนผสม</button><div class="actions"><button type="submit" class="btn" id="recipeSave">บันทึกสูตรออนไลน์</button><button type="button" class="btn secondary" id="recipeCancel">ยกเลิก</button></div></form>`}</div>`);
+ document.getElementById('recipeBack').onclick=()=>{recipeDetailId=null;recipeEditMode=false;renderRecipes()};
+ if(!edit){document.getElementById('recipeEdit').onclick=()=>{recipeEditMode=true;renderRecipes()};return}
+ document.getElementById('recipeCancel').onclick=()=>{if(fresh)recipeDetailId=null;recipeEditMode=false;renderRecipes()};
+ const rows=document.getElementById('cloudIngredientRows');
+ function addRow(stockId='',qty=''){const div=document.createElement('div');div.className='ingredient-row';div.innerHTML=`<select aria-label="วัตถุดิบ" required><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select><input aria-label="ปริมาณ" type="number" step="any" min="0.000001" required placeholder="ปริมาณ" value="${esc(qty)}"><button type="button" class="btn danger smallbtn">×</button>`;div.querySelector('button').onclick=()=>div.remove();rows.appendChild(div)}
+ (r.ingredients||[]).forEach(i=>addRow(i.stock_id,i.quantity));if(!(r.ingredients||[]).length)addRow();
+ document.getElementById('recipeAddIng').onclick=()=>addRow();
+ document.getElementById('recipeCloudForm').onsubmit=async e=>{
+  e.preventDefault();const btn=document.getElementById('recipeSave');btn.disabled=true;
+  try{
+   const d=new FormData(e.target),payload={shop_id:GLUR_SHOP_ID};for(const key of recipeFields)payload[key]=key==='selling_price'?Number(d.get(key)):String(d.get(key)||'').trim();
+   if(!payload.name||!Number.isFinite(payload.selling_price)||payload.selling_price<0)throw Error('ตรวจสอบชื่อและราคาขาย');
+   if(payload.image_path&&!/^https:\/\//i.test(payload.image_path))throw Error('URL รูปภาพต้องขึ้นต้นด้วย https://');
+   const ings=[...rows.children].map(el=>({stock_id:el.children[0].value,quantity:Number(el.children[1].value)}));
+   if(!ings.length||ings.some(i=>!i.stock_id||!Number.isFinite(i.quantity)||i.quantity<=0))throw Error('เพิ่มส่วนผสมและปริมาณที่ถูกต้องอย่างน้อยหนึ่งรายการ');
+   if(new Set(ings.map(i=>i.stock_id)).size!==ings.length)throw Error('วัตถุดิบซ้ำกัน กรุณารวมปริมาณเป็นแถวเดียว');
+   let rid=r.id;
+   if(fresh){const {data,error}=await glurSupabase.from('glur_recipes').insert(payload).select('id').single();if(error)throw error;rid=data.id}
+   else{const {data,error}=await glurSupabase.from('glur_recipes').update(payload).eq('id',rid).eq('shop_id',GLUR_SHOP_ID).select('id').single();if(error)throw error;if(!data)throw Error('ไม่มีสิทธิ์แก้ไขสูตร')}
+   const original=fresh?[]:(r.ingredients||[]).map(i=>({shop_id:GLUR_SHOP_ID,recipe_id:rid,stock_id:i.stock_id,quantity:i.quantity}));
+   const {error:delErr}=await glurSupabase.from('glur_recipe_ingredients').delete().eq('shop_id',GLUR_SHOP_ID).eq('recipe_id',rid);if(delErr)throw delErr;
+   const {error:ingErr}=await glurSupabase.from('glur_recipe_ingredients').insert(ings.map(i=>({...i,shop_id:GLUR_SHOP_ID,recipe_id:rid})));
+   if(ingErr){if(original.length)await glurSupabase.from('glur_recipe_ingredients').insert(original);throw Error('บันทึกส่วนผสมไม่สำเร็จ: '+ingErr.message+' กรุณาตรวจสอบสูตรก่อนใช้งาน')}
+   recipeDetailId=rid;recipeEditMode=false;toast('บันทึกสูตรออนไลน์สำเร็จ');await loadCloudRecipes();renderRecipes();
+  }catch(err){toast(err.message||'บันทึกสูตรไม่สำเร็จ');btn.disabled=false}
+ };
+}
+const glurOldShowAuthenticated=showAuthenticated;
+showAuthenticated=function(user){glurOldShowAuthenticated(user);loadCloudRecipes()};
+const glurOldSetPage=setPage;
+setPage=function(p){glurOldSetPage(p);if(p==='recipes'&&!recipeCloudReady)loadCloudRecipes()};
+const glurOldLoadCloudStock=loadCloudStock;
+loadCloudStock=async function(){await glurOldLoadCloudStock();if(currentUser&&page==='recipes')renderRecipes()};
+
 initAuth();
 </script>
 </body>
