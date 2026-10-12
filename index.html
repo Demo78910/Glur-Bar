@@ -483,6 +483,119 @@ setPage=function(p){glurReceiveOldSetPage(p);if(p==='receiving')loadCloudReceipt
 const glurReceiveOldShowAuthenticated=showAuthenticated;
 showAuthenticated=function(user){glurReceiveOldShowAuthenticated(user);loadCloudReceipts()};
 
+
+// GLUR BAR — cloud sales. Calls the existing four-argument RPC only.
+let glurSales=[],glurSaleItems=[],glurSalesReady=false,glurSalesError='',glurSalesBusy=false;
+let glurSalesSearch='',glurSaleHistoryLimit=50;
+async function loadGlurSales(){
+  glurSalesError='';
+  const {data,error}=await glurSupabase.from('glur_sales')
+    .select('id,shop_id,sold_by,total_amount,total_cost,sold_at,created_at,note')
+    .eq('shop_id',GLUR_SHOP_ID).order('sold_at',{ascending:false}).limit(glurSaleHistoryLimit);
+  if(error){glurSalesError=error.message;glurSalesReady=false}
+  else{
+    glurSales=data||[];glurSalesReady=true;
+    const ids=glurSales.map(x=>x.id);
+    glurSaleItems=[];
+    if(ids.length){
+      const res=await glurSupabase.from('glur_sale_items')
+        .select('sale_id,recipe_name,quantity,unit_price').in('sale_id',ids);
+      // Older/newer deployments can differ: history totals still work if item details are unavailable.
+      if(!res.error)glurSaleItems=res.data||[];
+    }
+  }
+  if(currentUser&&page==='sales')renderGlurSales();
+}
+function glurSaleDate(v){try{return new Date(v).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'})}catch(e){return '—'}}
+function renderGlurSales(){
+  const recipes=cloudRecipes.filter(r=>String(r.name||'').toLowerCase().includes(glurSalesSearch.toLowerCase()));
+  const negatives=cloudStock.filter(x=>num(x.quantity)<0);
+  const history=glurSales.map(s=>{
+    const items=glurSaleItems.filter(i=>i.sale_id===s.id);
+    const name=items.length?items.map(i=>`${esc(i.recipe_name)} × ${num(i.quantity)}`).join(', '):'รายการขาย';
+    return `<div class="item"><div style="min-width:0"><div class="item-name">${name}</div><div class="small muted">${esc(glurSaleDate(s.sold_at||s.created_at))} · ต้นทุน ${money(s.total_cost)}</div>${s.note?`<div class="small muted" style="white-space:pre-wrap">หมายเหตุ: ${esc(s.note)}</div>`:''}</div><strong style="white-space:nowrap">${money(s.total_amount)}</strong></div>`;
+  }).join('');
+  shell('ขายเครื่องดื่ม · ออนไลน์',`
+    <div class="hint">บันทึกยอดขายและตัดสต๊อกผ่าน Supabase · Staff / Manager / Owner บันทึกขายและหมายเหตุได้ · หมายเหตุไม่เปลี่ยนปริมาณที่ตัดตามสูตร</div>
+    ${negatives.length?`<div class="card" style="border-color:#b94d41"><strong class="warn">⚠ สต๊อกติดลบ ${negatives.length} รายการ</strong>${negatives.map(x=>`<div class="tableline"><span>${esc(x.name)}</span><strong class="warn">${num(x.quantity)} ${esc(x.unit)}</strong></div>`).join('')}</div>`:''}
+    <div class="card">
+      <div class="section-title" style="margin-top:0">บันทึกการขาย</div>
+      ${recipeCloudError?`<div class="hint warn">โหลดสูตรไม่ได้: ${esc(recipeCloudError)}</div>`:''}
+      <form id="glurCloudSaleForm" class="stack">
+        <div class="field"><label>ค้นหาเมนู</label><input id="glurSaleSearch" placeholder="พิมพ์ชื่อค็อกเทล…" value="${esc(glurSalesSearch)}"></div>
+        <div class="field"><label>เมนูเครื่องดื่ม</label><select name="recipe_id" required>
+          <option value="">— เลือกเมนู —</option>
+          ${recipes.map(r=>`<option value="${r.id}">${esc(r.name)} — ${money(r.selling_price)}</option>`).join('')}
+        </select></div>
+        <div class="formgrid">
+          <div class="field"><label>จำนวนแก้ว</label><input name="quantity" type="number" min="1" step="1" value="1" required></div>
+          <div class="field"><label>ยอดขายรวมโดยประมาณ</label><div id="glurSaleTotal" class="detail-value" style="font-size:19px;padding:8px 0">—</div></div>
+        </div>
+        <div class="field"><label>หมายเหตุการขาย (ไม่บังคับ)</label><textarea name="note" rows="3" maxlength="2000" placeholder="เช่น เปลี่ยนวิธีทำ / เทเกินสูตร / ลูกค้าขอหวานน้อย"></textarea></div>
+        <div id="glurSalePreview" class="small muted"></div>
+        <button type="submit" class="btn full" ${glurSalesBusy||!cloudRecipes.length?'disabled':''}>${glurSalesBusy?'กำลังบันทึก…':'ยืนยันขายและตัดสต๊อก'}</button>
+      </form>
+    </div>
+    <div class="row between"><div class="section-title">ประวัติการขายล่าสุด</div><button class="btn secondary smallbtn" id="glurRefreshSales">↻ รีเฟรช</button></div>
+    ${glurSalesError?`<div class="hint warn">โหลดประวัติไม่ได้: ${esc(glurSalesError)}</div>`:''}
+    <div class="card">${!glurSalesReady&&!glurSalesError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติการขาย')}</div>
+    <div class="small muted">แสดง ${glurSaleHistoryLimit} รายการล่าสุด · ข้อมูลยอดขายจาก Supabase · หากไม่มีชื่อเมนูในประวัติ แสดงเฉพาะยอดรวมจากบิล</div>
+  `);
+  const form=document.getElementById('glurCloudSaleForm');
+  const selector=form.elements.recipe_id;
+  const preview=()=>{
+    const r=cloudRecipes.find(x=>x.id===selector.value),qty=Number(form.elements.quantity.value);
+    document.getElementById('glurSaleTotal').textContent=r&&Number.isInteger(qty)&&qty>0?money(num(r.selling_price)*qty):'—';
+    if(!r){document.getElementById('glurSalePreview').textContent='เลือกเมนูเพื่อดูวัตถุดิบที่จะตัด';return}
+    const ing=(r.ingredients||[]).map(i=>{
+      const st=cloudStock.find(x=>x.id===i.stock_id),needed=num(i.quantity)*qty;
+      return `${st?.name||'ไม่พบวัตถุดิบ'} ${needed} ${st?.unit||''}${st&&num(st.quantity)-needed<0?' ⚠ อาจติดลบ':''}`;
+    });
+    document.getElementById('glurSalePreview').textContent=ing.length?'ตัดตามสูตร: '+ing.join(' · '):'⚠ สูตรนี้ไม่มีรายการส่วนผสม';
+  };
+  selector.onchange=preview;form.elements.quantity.oninput=preview;preview();
+  document.getElementById('glurSaleSearch').oninput=e=>{
+    const value=e.target.value,selected=selector.value;
+    glurSalesSearch=value;
+    const matching=cloudRecipes.filter(r=>String(r.name||'').toLowerCase().includes(value.toLowerCase()));
+    selector.innerHTML='<option value="">— เลือกเมนู —</option>'+matching.map(r=>`<option value="${r.id}">${esc(r.name)} — ${money(r.selling_price)}</option>`).join('');
+    if(matching.some(r=>r.id===selected))selector.value=selected;
+    preview();
+  };
+  document.getElementById('glurRefreshSales').onclick=async()=>{await Promise.all([loadGlurSales(),loadCloudStock(),loadCloudRecipes()]);if(page==='sales')renderGlurSales()};
+  form.onsubmit=async e=>{
+    e.preventDefault();if(glurSalesBusy)return;
+    const rid=selector.value,r=cloudRecipes.find(x=>x.id===rid);
+    const qty=Number(form.elements.quantity.value),note=String(form.elements.note.value||'').trim();
+    if(!r||!Number.isInteger(qty)||qty<=0){toast('เลือกเมนูและจำนวนแก้วที่ถูกต้อง');return}
+    if(!(r.ingredients||[]).length){toast('สูตรนี้ยังไม่มีส่วนผสม');return}
+    const wouldGoNegative=(r.ingredients||[]).some(i=>{const st=cloudStock.find(x=>x.id===i.stock_id);return st&&num(st.quantity)-num(i.quantity)*qty<0});
+    if(!confirm(`ยืนยันขาย ${r.name} จำนวน ${qty} แก้ว ยอด ${money(num(r.selling_price)*qty)}${wouldGoNegative?'\n⚠ มีวัตถุดิบที่อาจติดลบ':''}?`))return;
+    glurSalesBusy=true;
+    const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='กำลังบันทึก…';
+    try{
+      const {error}=await glurSupabase.rpc('glur_record_sale_v2',{
+        p_shop_id:GLUR_SHOP_ID,p_recipe_id:rid,p_quantity:qty,p_note:note||null
+      });
+      if(error)throw error;
+      toast('บันทึกการขายออนไลน์สำเร็จ');
+      await Promise.all([loadCloudStock(),loadGlurSales()]);
+      if(currentUser&&page==='sales')renderGlurSales();
+    }catch(err){toast('ขายไม่สำเร็จ: '+(err.message||err));button.disabled=false;button.textContent='ยืนยันขายและตัดสต๊อก'}
+    finally{glurSalesBusy=false}
+  };
+}
+const glurSalesPreviousRender=render;
+render=function(){
+  if(!currentUser)return;
+  if(page==='sales'){renderGlurSales();return}
+  glurSalesPreviousRender();
+};
+const glurSalesPreviousSetPage=setPage;
+setPage=function(p){glurSalesPreviousSetPage(p);if(p==='sales'){loadGlurSales();if(!recipeCloudReady)loadCloudRecipes()}};
+const glurSalesPreviousShowAuthenticated=showAuthenticated;
+showAuthenticated=function(user){glurSalesPreviousShowAuthenticated(user);loadGlurSales()};
+
 initAuth();
 </script>
 </body>
