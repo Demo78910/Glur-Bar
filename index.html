@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#101010">
+<meta name="theme-color" content="#F47721">
 <title>GLUR BAR — Stock & Sales</title>
 <style>
 :root{--bg:#FFF8F2;--panel:#FFFFFF;--panel2:#FFF0E5;--gold:#F47721;--gold2:#E96512;--text:#302820;--muted:#8A786B;--line:#F0D7C5;--red:#D83B32;--green:#278653}
@@ -57,9 +57,17 @@ input:focus,select:focus{border-color:var(--gold)}
 .hint{border-left:3px solid var(--gold);padding:8px 10px;background:#FFF0E5;border-radius:0 8px 8px 0;color:#70401F;font-size:12px;margin:10px 0}
 .actions{display:flex;gap:7px;flex-wrap:wrap}
 @media(min-width:650px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.wrap{padding-top:22px}.formgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.auth-screen{max-width:420px;margin:38px auto;padding:0 12px}
+.auth-screen .card{padding:22px}
+.auth-screen h2{margin:0 0 7px;font-size:23px}
+.auth-screen .stack{margin-top:18px}
+.auth-status{font-size:13px;margin:12px 0;color:var(--muted)}
+.auth-status.error{color:var(--red)}
+.account-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 12px;font-size:12px;color:var(--muted)}
 </style>
-</head>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
 <body>
 <header class="top"><div class="brand">GLUR BAR</div><div class="sub">STOCK · RECIPES · SALES · REPORTS</div></header>
 <main class="wrap" id="app"></main>
@@ -89,7 +97,7 @@ function num(v){const n=Number(v);return Number.isFinite(n)?n:0}
 function dateNow(){return new Date().toISOString().slice(0,10)}
 function monthNow(){return dateNow().slice(0,7)}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.add('hidden'),2400)}
-function setPage(p){page=p;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));render()}
+function setPage(p){if(!currentUser)return;page=p;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));render()}
 document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)setPage(b.dataset.page)});
 function stockById(sid){return db.stock.find(s=>s.id===sid)}
 function recipeCost(r){return (r.ingredients||[]).reduce((sum,x)=>{const s=stockById(x.stockId);return sum+(s?num(x.qty)*num(s.cost):0)},0)}
@@ -99,7 +107,7 @@ function monthExpenses(m){return db.expenses.filter(x=>(x.date||'').slice(0,7)==
 function shell(title,body){document.getElementById('app').innerHTML=`<div class="page-title">${title}</div>${body}`}
 function metric(label,value,sub=''){return `<div class="card"><div class="metric-label">${label}</div><div class="metric">${value}</div>${sub?`<div class="small muted">${sub}</div>`:''}</div>`}
 function empty(msg){return `<div class="empty">${msg}</div>`}
-function render(){const f={dashboard:renderDashboard,stock:renderStock,recipes:renderRecipes,sales:renderSales,receiving:renderReceiving,costs:renderCosts,reports:renderReports,settings:renderSettings};(f[page]||renderDashboard)()}
+function render(){if(!currentUser)return;const f={dashboard:renderDashboard,stock:renderStock,recipes:renderRecipes,sales:renderSales,receiving:renderReceiving,costs:renderCosts,reports:renderReports,settings:renderSettings};(f[page]||renderDashboard)()}
 function renderDashboard(){const m=monthNow(),ss=monthSales(m),rev=sum(ss,s=>num(s.revenue)),cogs=sum(ss,s=>num(s.cost)),exp=sum(monthExpenses(m),x=>num(x.amount));shell('ภาพรวมร้าน',`<div class="muted small">${m} · สรุปข้อมูลเดือนปัจจุบัน</div><div class="grid" style="margin-top:12px">${metric('ยอดขายเดือนนี้',money(rev))}${metric('ต้นทุนสินค้าที่ขาย',money(cogs))}${metric('ค่าใช้จ่ายอื่น',money(exp))}${metric('กำไรหลังหักค่าใช้จ่าย',money(rev-cogs-exp))}</div><div class="section-title">สต๊อกใกล้หมด</div><div class="card">${(()=>{const low=db.stock.filter(s=>num(s.qty)<=num(s.low));return low.length?low.map(s=>`<div class="item"><div><div class="item-name">${esc(s.name)}</div><div class="small muted">เหลือ ${num(s.qty)} ${esc(s.unit)}</div></div><span class="pill warn">ใกล้หมด</span></div>`).join(''):empty('ยังไม่มีรายการสต๊อกที่ต่ำกว่าระดับแจ้งเตือน')})()}</div><div class="section-title">ทางลัด</div><div class="grid"><button class="btn secondary" onclick="setPage('stock')">＋ เพิ่มวัตถุดิบ</button><button class="btn secondary" onclick="setPage('recipes')">✧ สร้างสูตร</button><button class="btn secondary" onclick="setPage('sales')">＋ บันทึกยอดขาย</button><button class="btn secondary" onclick="setPage('receiving')">⇩ รับของเข้า</button></div><div class="hint">ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้ ควรสำรองข้อมูลเป็นระยะผ่านเมนู “สำรอง”</div>`)}
 function renderStock(){shell('สต๊อกวัตถุดิบ',`<div class="card"><div class="section-title" style="margin-top:0">เพิ่มวัตถุดิบ</div><form id="stockForm" class="formgrid"><div class="field wide"><label>ชื่อวัตถุดิบ / สินค้า</label><input name="name" required placeholder="เช่น Tanqueray Gin" /></div><div class="field"><label>จำนวนเริ่มต้น</label><input name="qty" type="number" step="any" min="0" value="0" required /></div><div class="field"><label>หน่วยหลัก</label><select name="unit"><option value="ml">ml</option><option value="g">g</option><option value="ชิ้น">ชิ้น</option><option value="ขวด">ขวด</option><option value="ถุง">ถุง</option><option value="หน่วย">หน่วย</option></select></div><div class="field"><label>ต้นทุนต่อหน่วย (บาท)</label><input name="cost" type="number" step="any" min="0" value="0" required /></div><div class="field"><label>แจ้งเตือนเมื่อเหลือ</label><input name="low" type="number" step="any" min="0" value="0" /></div><div class="wide"><button class="btn full" type="submit">＋ บันทึกวัตถุดิบ</button></div></form></div><div class="section-title">รายการทั้งหมด (${db.stock.length})</div><div class="card">${db.stock.length?db.stock.map(s=>`<div class="item"><div style="min-width:0"><div class="item-name">${esc(s.name)}</div><div class="small muted">ต้นทุน ${money(s.cost)}/${esc(s.unit)} · แจ้งเตือนที่ ${num(s.low)} ${esc(s.unit)}</div><div class="${num(s.qty)<=num(s.low)?'warn':'good'}">คงเหลือ ${num(s.qty)} ${esc(s.unit)}</div></div><div class="actions"><button class="btn secondary smallbtn" onclick="editStock('${s.id}')">แก้ไข</button><button class="btn danger smallbtn" onclick="deleteStock('${s.id}')">ลบ</button></div></div>`).join(''):empty('ยังไม่มีวัตถุดิบ เพิ่มรายการแรกด้านบน')}</div>`);document.getElementById('stockForm').addEventListener('submit',e=>{e.preventDefault();const d=new FormData(e.target);db.stock.push({id:id(),name:String(d.get('name')).trim(),qty:num(d.get('qty')),unit:d.get('unit'),cost:num(d.get('cost')),low:num(d.get('low'))});saveDB();toast('เพิ่มวัตถุดิบแล้ว');renderStock()})}
 function editStock(sid){const s=stockById(sid);if(!s)return;const name=prompt('ชื่อวัตถุดิบ',s.name);if(name===null)return;const qty=prompt(`จำนวนคงเหลือ (${s.unit})`,s.qty);if(qty===null)return;const cost=prompt(`ต้นทุนต่อ ${s.unit} (บาท)`,s.cost);if(cost===null)return;s.name=name.trim()||s.name;s.qty=Math.max(0,num(qty));s.cost=Math.max(0,num(cost));saveDB();renderStock();toast('แก้ไขแล้ว')}
@@ -114,7 +122,48 @@ function deleteExpense(eid){if(!confirm('ลบรายการนี้หร
 function renderReports(){const m=monthNow(),ss=monthSales(m),rev=sum(ss,s=>num(s.revenue)),cogs=sum(ss,s=>num(s.cost)),ex=monthExpenses(m),expenses=sum(ex,x=>num(x.amount));shell('รายงานประจำเดือน',`<div class="card"><div class="field"><label>เลือกเดือน</label><input type="month" id="reportMonth" value="${m}"></div><div id="reportData" style="margin-top:14px"></div><button class="btn secondary full" style="margin-top:12px" id="exportCSV">ส่งออกรายการขาย CSV</button></div><div class="section-title">หมายเหตุการคำนวณ</div><div class="hint">กำไรสุทธิในรายงานนี้ = ยอดขาย − ต้นทุนสูตรของรายการขาย − ค่าใช้จ่ายที่บันทึกไว้ ไม่รวมค่าใช้จ่ายที่ยังไม่ได้บันทึกหรือภาษี</div>`);function update(){const mm=document.getElementById('reportMonth').value, sales=monthSales(mm), exps=monthExpenses(mm),revenue=sum(sales,s=>num(s.revenue)),cost=sum(sales,s=>num(s.cost)),other=sum(exps,x=>num(x.amount));document.getElementById('reportData').innerHTML=`<div class="stack">${[['ยอดขาย',money(revenue)],['ต้นทุนสินค้าที่ขาย',money(cost)],['กำไรขั้นต้น',money(revenue-cost)],['ค่าใช้จ่ายอื่น',money(other)],['กำไรหลังหักค่าใช้จ่าย',money(revenue-cost-other)],['จำนวนรายการขาย',sales.length+' รายการ']].map(([a,b])=>`<div class="tableline"><span class="muted">${a}</span><strong>${b}</strong></div>`).join('')}</div><div class="section-title">ขายดีในเดือนนี้</div>${(()=>{const tally={};sales.forEach(s=>tally[s.name]=(tally[s.name]||0)+num(s.qty));const top=Object.entries(tally).sort((a,b)=>b[1]-a[1]).slice(0,5);return top.length?top.map(([n,q])=>`<div class="tableline"><span>${esc(n)}</span><strong>${q} แก้ว</strong></div>`).join(''):empty('ไม่มีรายการขายในเดือนนี้')})()}`};update();document.getElementById('reportMonth').addEventListener('change',update);document.getElementById('exportCSV').onclick=()=>{const mm=document.getElementById('reportMonth').value,sales=monthSales(mm),rows=[['date','menu','quantity','revenue_THB','cost_THB'],...sales.map(s=>[s.date,s.name,s.qty,s.revenue,s.cost])];const csv='\ufeff'+rows.map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\r\n');downloadBlob(csv,`glur-bar-sales-${mm}.csv`,'text/csv;charset=utf-8;') }}
 function renderSettings(){shell('สำรองและกู้คืนข้อมูล',`<div class="card"><div class="section-title" style="margin-top:0">ข้อมูลของ GLUR BAR</div><div class="grid">${metric('วัตถุดิบ',db.stock.length+' รายการ')}${metric('สูตร',db.recipes.length+' รายการ')}${metric('ยอดขาย',db.sales.length+' รายการ')}${metric('ค่าใช้จ่าย',db.expenses.length+' รายการ')}</div><div class="hint">ข้อมูลเก็บอยู่ใน localStorage ของเบราว์เซอร์นี้ หากล้างข้อมูลเว็บไซต์ เปลี่ยนเบราว์เซอร์ หรือเครื่องเสีย ข้อมูลอาจหายได้ กรุณาดาวน์โหลดไฟล์สำรองเป็นระยะ</div><button id="backup" class="btn full">ดาวน์โหลดไฟล์สำรอง JSON</button><div class="section-title">กู้คืนข้อมูลจากไฟล์สำรอง</div><div class="field"><label>เลือกไฟล์ JSON ที่เคยสำรองไว้</label><input id="restoreFile" type="file" accept="application/json,.json"></div><button id="restore" class="btn secondary full" style="margin-top:10px">นำเข้าข้อมูลจากไฟล์</button><div class="section-title">เริ่มต้นใหม่</div><button id="reset" class="btn danger full">ลบข้อมูลทั้งหมดในเครื่องนี้</button></div><div class="small muted">GLUR BAR · เวอร์ชันทดลองใช้งานในเครื่อง · ไม่ใช่ระบบ Cloud</div>`);document.getElementById('backup').onclick=()=>downloadBlob(JSON.stringify({...db,exportedAt:new Date().toISOString(),app:'GLUR BAR'},null,2),`glur-bar-backup-${dateNow()}.json`,'application/json');document.getElementById('restore').onclick=()=>{const file=document.getElementById('restoreFile').files[0];if(!file){toast('เลือกไฟล์สำรองก่อน');return}const reader=new FileReader();reader.onload=()=>{try{const parsed=JSON.parse(reader.result);if(!parsed||!Array.isArray(parsed.stock)||!Array.isArray(parsed.recipes)||!Array.isArray(parsed.sales))throw Error('invalid');if(!confirm('ข้อมูลปัจจุบันจะถูกแทนที่ด้วยข้อมูลในไฟล์ ต้องการดำเนินการต่อหรือไม่?'))return;db={...blank(),...parsed};saveDB();toast('กู้คืนข้อมูลสำเร็จ');renderSettings()}catch(err){toast('ไฟล์ไม่ถูกต้องหรือไม่ใช่ไฟล์สำรอง GLUR BAR')}};reader.readAsText(file)};document.getElementById('reset').onclick=()=>{if(!confirm('ยืนยันลบข้อมูลทั้งหมด? แนะนำให้ดาวน์โหลดไฟล์สำรองก่อน'))return;if(!confirm('ยืนยันอีกครั้ง: ข้อมูลสต๊อก สูตร ยอดขาย และค่าใช้จ่ายจะถูกลบ'))return;db=blank();saveDB();toast('ล้างข้อมูลแล้ว');renderSettings()}}
 function downloadBlob(content,filename,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-render();
+// Authentication gates the existing local-only app. Cloud data sync is NOT enabled yet.
+let currentUser=null;
+function authScreen(mode='signin',message='',isError=false){
+  document.getElementById('nav').classList.add('hidden');
+  const register=mode==='signup';
+  document.getElementById('app').innerHTML=`<div class="auth-screen"><div class="card"><h2>${register?'สมัครบัญชี GLUR BAR':'เข้าสู่ระบบ GLUR BAR'}</h2><div class="small muted">${register?'สร้างบัญชีด้วยอีเมลและรหัสผ่าน':'ลงชื่อเข้าใช้ด้วยบัญชี Supabase'}</div><form id="authForm" class="stack"><div class="field"><label>อีเมล</label><input name="email" type="email" autocomplete="email" required></div><div class="field"><label>รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)</label><input name="password" type="password" minlength="6" autocomplete="${register?'new-password':'current-password'}" required></div><button id="authSubmit" type="submit" class="btn full">${register?'สมัครสมาชิก':'เข้าสู่ระบบ'}</button></form><div id="authStatus" class="auth-status${isError?' error':''}" role="status">${esc(message)}</div><button class="btn secondary full" id="switchAuth">${register?'มีบัญชีแล้ว? เข้าสู่ระบบ':'ยังไม่มีบัญชี? สมัครสมาชิก'}</button><div class="hint">หลังล็อกอิน ระบบสต๊อกและยอดขายยังเก็บในเบราว์เซอร์เครื่องนี้ ไม่ได้ซิงก์ข้ามเครื่องจนกว่าจะเชื่อมฐานข้อมูลในขั้นถัดไป</div></div></div>`;
+  document.getElementById('switchAuth').onclick=()=>authScreen(register?'signin':'signup');
+  document.getElementById('authForm').onsubmit=async e=>{
+    e.preventDefault();const button=document.getElementById('authSubmit');button.disabled=true;
+    const d=new FormData(e.target),email=String(d.get('email')).trim(),password=String(d.get('password'));
+    const result=register?await glurSupabase.auth.signUp({email,password}):await glurSupabase.auth.signInWithPassword({email,password});
+    button.disabled=false;
+    if(result.error){document.getElementById('authStatus').textContent=result.error.message;document.getElementById('authStatus').classList.add('error');return}
+    if(register&&!result.data.session){authScreen('signin','สมัครบัญชีแล้ว กรุณายืนยันอีเมลจากกล่องจดหมายก่อนเข้าสู่ระบบ');return}
+    if(result.data.session)showAuthenticated(result.data.session.user);
+  };
+}
+function showAuthenticated(user){
+  currentUser=user;document.getElementById('nav').classList.remove('hidden');
+  render();
+  const app=document.getElementById('app');
+  const bar=document.createElement('div');bar.className='account-bar';
+  const label=document.createElement('span');label.textContent='บัญชี: '+(user.email||'ผู้ใช้');
+  const out=document.createElement('button');out.className='btn secondary smallbtn';out.textContent='ออกจากระบบ';
+  out.onclick=async()=>{out.disabled=true;const {error}=await glurSupabase.auth.signOut();if(error){toast(error.message);out.disabled=false;return}currentUser=null;authScreen()};
+  bar.append(label,out);app.prepend(bar);
+}
+async function initAuth(){
+  document.getElementById('nav').classList.add('hidden');
+  document.getElementById('app').innerHTML='<div class="auth-screen"><div class="card">กำลังตรวจสอบการเข้าสู่ระบบ…</div></div>';
+  try{
+    if(!window.supabase)throw new Error('ไม่สามารถโหลด Supabase Client ได้');
+    const {data,error}=await glurSupabase.auth.getSession();
+    if(error)throw error;
+    if(data.session?.user)showAuthenticated(data.session.user);else authScreen();
+  }catch(e){authScreen('signin','ไม่สามารถตรวจสอบการเข้าสู่ระบบ: '+e.message,true)}
+}
+glurSupabase.auth.onAuthStateChange((event,session)=>{
+  if(event==='SIGNED_OUT'){currentUser=null;authScreen()}
+  else if(event==='SIGNED_IN'&&session?.user&&currentUser?.id!==session.user.id)showAuthenticated(session.user);
+});
+initAuth();
 </script>
 </body>
 </html>
