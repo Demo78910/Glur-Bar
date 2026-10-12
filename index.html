@@ -124,19 +124,35 @@ function renderSettings(){shell('สำรองและกู้คืนข�
 function downloadBlob(content,filename,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 // Authentication gates the existing local-only app. Cloud data sync is NOT enabled yet.
 let currentUser=null;
-function authScreen(mode='signin',message='',isError=false){
+function authScreen(message='',isError=false){
   document.getElementById('nav').classList.add('hidden');
-  const register=mode==='signup';
-  document.getElementById('app').innerHTML=`<div class="auth-screen"><div class="card"><h2>${register?'สมัครบัญชี GLUR BAR':'เข้าสู่ระบบ GLUR BAR'}</h2><div class="small muted">${register?'สร้างบัญชีด้วยอีเมลและรหัสผ่าน':'ลงชื่อเข้าใช้ด้วยบัญชี Supabase'}</div><form id="authForm" class="stack"><div class="field"><label>อีเมล</label><input name="email" type="email" autocomplete="email" required></div><div class="field"><label>รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)</label><input name="password" type="password" minlength="6" autocomplete="${register?'new-password':'current-password'}" required></div><button id="authSubmit" type="submit" class="btn full">${register?'สมัครสมาชิก':'เข้าสู่ระบบ'}</button></form><div id="authStatus" class="auth-status${isError?' error':''}" role="status">${esc(message)}</div><button class="btn secondary full" id="switchAuth">${register?'มีบัญชีแล้ว? เข้าสู่ระบบ':'ยังไม่มีบัญชี? สมัครสมาชิก'}</button><div class="hint">หลังล็อกอิน ระบบสต๊อกและยอดขายยังเก็บในเบราว์เซอร์เครื่องนี้ ไม่ได้ซิงก์ข้ามเครื่องจนกว่าจะเชื่อมฐานข้อมูลในขั้นถัดไป</div></div></div>`;
-  document.getElementById('switchAuth').onclick=()=>authScreen(register?'signin':'signup');
+  document.getElementById('app').innerHTML=`<div class="auth-screen"><div class="card"><h2>เข้าสู่ระบบ GLUR BAR</h2><div class="small muted">STAFF LOGIN · เข้าสู่ระบบด้วย ID และรหัสผ่าน</div><form id="authForm" class="stack"><div class="field"><label>ID ผู้ใช้งาน</label><input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" pattern="[a-z0-9_]{3,30}" placeholder="เช่น owner001" required></div><div class="field"><label>รหัสผ่าน</label><input name="password" type="password" autocomplete="current-password" required></div><button id="authSubmit" type="submit" class="btn full">เข้าสู่ระบบ</button></form><div id="authStatus" class="auth-status${isError?' error':''}" role="status">${esc(message)}</div><div class="hint">เจ้าของร้านเป็นผู้สร้างบัญชีพนักงาน ไม่มีการสมัครสมาชิกเอง · ข้อมูลสต๊อกและยอดขายยังเก็บในเบราว์เซอร์เครื่องนี้ ไม่ได้ซิงก์ข้ามเครื่อง</div></div></div>`;
   document.getElementById('authForm').onsubmit=async e=>{
-    e.preventDefault();const button=document.getElementById('authSubmit');button.disabled=true;
-    const d=new FormData(e.target),email=String(d.get('email')).trim(),password=String(d.get('password'));
-    const result=register?await glurSupabase.auth.signUp({email,password}):await glurSupabase.auth.signInWithPassword({email,password});
-    button.disabled=false;
-    if(result.error){document.getElementById('authStatus').textContent=result.error.message;document.getElementById('authStatus').classList.add('error');return}
-    if(register&&!result.data.session){authScreen('signin','สมัครบัญชีแล้ว กรุณายืนยันอีเมลจากกล่องจดหมายก่อนเข้าสู่ระบบ');return}
-    if(result.data.session)showAuthenticated(result.data.session.user);
+    e.preventDefault();
+    const button=document.getElementById('authSubmit');
+    const status=document.getElementById('authStatus');
+    button.disabled=true;status.textContent='กำลังเข้าสู่ระบบ…';status.classList.remove('error');
+    try{
+      const d=new FormData(e.target);
+      const username=String(d.get('username')||'').trim().toLowerCase();
+      const password=String(d.get('password')||'');
+      const response=await fetch(SUPABASE_URL+'/functions/v1/glur-login',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+        body:JSON.stringify({username,password})
+      });
+      const result=await response.json();
+      if(!response.ok||!result.access_token||!result.refresh_token){
+        throw new Error(response.status===401?'ID หรือรหัสผ่านไม่ถูกต้อง':(result.error||'ไม่สามารถเข้าสู่ระบบได้'));
+      }
+      const {data,error}=await glurSupabase.auth.setSession({
+        access_token:result.access_token,
+        refresh_token:result.refresh_token
+      });
+      if(error||!data.user)throw new Error(error?.message||'ไม่สามารถเริ่มเซสชันได้');
+      showAuthenticated(data.user);
+    }catch(err){status.textContent=err.message||'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';status.classList.add('error')}
+    finally{button.disabled=false}
   };
 }
 function showAuthenticated(user){
@@ -144,7 +160,7 @@ function showAuthenticated(user){
   render();
   const app=document.getElementById('app');
   const bar=document.createElement('div');bar.className='account-bar';
-  const label=document.createElement('span');label.textContent='บัญชี: '+(user.email||'ผู้ใช้');
+  const label=document.createElement('span');label.textContent='บัญชีผู้ใช้งาน GLUR BAR';
   const out=document.createElement('button');out.className='btn secondary smallbtn';out.textContent='ออกจากระบบ';
   out.onclick=async()=>{out.disabled=true;const {error}=await glurSupabase.auth.signOut();if(error){toast(error.message);out.disabled=false;return}currentUser=null;authScreen()};
   bar.append(label,out);app.prepend(bar);
@@ -157,7 +173,7 @@ async function initAuth(){
     const {data,error}=await glurSupabase.auth.getSession();
     if(error)throw error;
     if(data.session?.user)showAuthenticated(data.session.user);else authScreen();
-  }catch(e){authScreen('signin','ไม่สามารถตรวจสอบการเข้าสู่ระบบ: '+e.message,true)}
+  }catch(e){authScreen('ไม่สามารถตรวจสอบการเข้าสู่ระบบ: '+e.message,true)}
 }
 glurSupabase.auth.onAuthStateChange((event,session)=>{
   if(event==='SIGNED_OUT'){currentUser=null;authScreen()}
