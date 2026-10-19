@@ -132,7 +132,7 @@ input::placeholder,textarea::placeholder{color:#89776d}
 <div id="glurAccount" class="glur-account hidden" aria-label="ข้อมูลบัญชีผู้ใช้"><span id="glurAccountText">กำลังตรวจสอบสิทธิ์…</span><button type="button" id="glurLogout" class="btn secondary smallbtn">ออกจากระบบ</button></div>
 <main class="wrap" id="app"></main>
 <nav class="nav" id="nav">
-<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
+<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="prebatch"><span>⚗</span>Pre-batch</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
 </nav>
 <div id="toast" class="toast hidden" role="status"></div>
 <script>
@@ -961,6 +961,69 @@ const glurCloudShowAuthenticated=showAuthenticated;
 showAuthenticated=function(user){glurCloudShowAuthenticated(user);glurLoadExpenses()};
 const glurCloudLogout=glurLogout;
 glurLogout=async function(){glurExpenses=[];glurExpensesReady=false;await glurCloudLogout()};
+
+
+// GLUR BAR Pre-batch: recipes, atomic production, batches and finished-stock integration.
+let pbRecipes=[],pbBatches=[],pbReady=false,pbError='',pbBusy=false,pbSelected='',pbMode='list';
+async function pbLoad(){
+ if(!currentUser)return;
+ const [a,b,c]=await Promise.all([
+  glurSupabase.from('glur_prebatch_recipes').select('id,shop_id,name,output_stock_id,notes,created_at').eq('shop_id',GLUR_SHOP_ID).order('created_at',{ascending:false}),
+  glurSupabase.from('glur_prebatch_ingredients').select('recipe_id,stock_id,quantity').eq('shop_id',GLUR_SHOP_ID),
+  glurSupabase.from('glur_prebatch_batches').select('id,recipe_id,produced_qty,total_cost,produced_by,produced_at,notes').eq('shop_id',GLUR_SHOP_ID).order('produced_at',{ascending:false}).limit(100)
+ ]);
+ pbError=[a.error,b.error,c.error].filter(Boolean).map(e=>e.message).join(' · ');
+ pbReady=!pbError;pbRecipes=(a.data||[]).map(r=>({...r,ingredients:(b.data||[]).filter(i=>i.recipe_id===r.id)}));pbBatches=c.data||[];
+ if(currentUser&&page==='prebatch')pbRender();
+}
+function pbStock(id){return cloudStock.find(x=>x.id===id)}
+function pbUnit(id){return pbStock(id)?.unit||''}
+function pbIngredientRows(r){return (r.ingredients||[]).map(i=>{const st=pbStock(i.stock_id);return `<div class="tableline"><span>${esc(st?.name||'ไม่พบวัตถุดิบ')} · ${num(i.quantity)} ${esc(st?.unit||'')}</span><strong>${money(num(i.quantity)*num(st?.cost_per_unit))}</strong></div>`}).join('')}
+function pbRender(){
+ if(!cloudReady){shell('Pre-batch','<div class="card">กำลังโหลดสต๊อกออนไลน์…</div>');return}
+ if(pbMode==='create'){pbRenderCreate();return}
+ if(pbMode==='produce'){pbRenderProduce();return}
+ const mayEdit=glurCanAdjust();
+ shell('Pre-batch · GLUR BAR',`<div class="hint">สร้างสูตร → ผลิตจริง → ตัดวัตถุดิบต้นทาง → เพิ่ม Pre-batch เข้าสต๊อก → เลือกใช้ใน Recipes / Sales ได้ทันที · ทุกขั้นตอนบันทึกใน Supabase</div>
+ <div class="row between" style="margin-bottom:12px"><strong>สูตร Pre-batch (${pbRecipes.length})</strong><div class="actions"><button class="btn secondary smallbtn" id="pbRefresh">↻</button>${mayEdit?'<button class="btn smallbtn" id="pbCreate">＋ สร้างสูตร</button>':''}</div></div>
+ ${pbError?`<div class="hint warn">${esc(pbError)} · กรุณาติดตั้งไฟล์ SQL ก่อน</div>`:''}
+ <div class="card">${pbRecipes.map(r=>{const out=pbStock(r.output_stock_id);return `<div class="item"><div><div class="item-name">${esc(r.name)}</div><div class="small muted">ผลผลิต: ${esc(out?.name||'ไม่พบสต๊อกผลผลิต')} · คงเหลือ ${num(out?.quantity)} ${esc(out?.unit||'')} · ต้นทุน ${money(out?.cost_per_unit)}/${esc(out?.unit||'')}</div><div class="small muted">${r.ingredients.length} วัตถุดิบ</div></div><button class="btn secondary smallbtn" data-pb-produce="${r.id}">รายละเอียด / ผลิต</button></div>`}).join('')||empty(pbReady?'ยังไม่มีสูตร Pre-batch':'กำลังโหลด…')}</div>
+ <div class="section-title">ประวัติผลิตล่าสุด</div><div class="card">${pbBatches.map(b=>{const r=pbRecipes.find(x=>x.id===b.recipe_id);return `<div class="item"><div><strong>${esc(r?.name||'สูตรเดิม')}</strong><div class="small muted">${esc(glurSaleDate(b.produced_at))} · ได้ ${num(b.produced_qty)} ${esc(pbUnit(r?.output_stock_id))} · ${esc(String(b.produced_by||'').slice(0,8))}…</div>${b.notes?`<div class="small muted">${esc(b.notes)}</div>`:''}</div><strong>${money(b.total_cost)}</strong></div>`}).join('')||empty('ยังไม่มีประวัติผลิต')}</div>`);
+ document.getElementById('pbRefresh').onclick=async()=>{await loadCloudStock();await pbLoad()};
+ if(mayEdit)document.getElementById('pbCreate').onclick=()=>{pbMode='create';pbRender()};
+ document.querySelectorAll('[data-pb-produce]').forEach(b=>b.onclick=()=>{pbSelected=b.dataset.pbProduce;pbMode='produce';pbRender()});
+}
+function pbRenderCreate(){
+ if(!glurCanAdjust()){pbMode='list';pbRender();return}
+ const options=cloudStock.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} (${esc(s.unit)})</option>`).join('');
+ shell('สร้างสูตร Pre-batch',`<button class="back-link" id="pbBack">‹ กลับ</button><div class="hint">ก่อนสร้างสูตร ให้เพิ่มวัตถุดิบผลผลิต เช่น Coconut Fat-Washed Vodka ในเมนูสต๊อก (ยอดเริ่มต้น 0) แล้วกลับมาเลือกเป็นสต๊อกผลผลิต · สูตรที่ผลิตแล้วไม่อนุญาตให้แก้ไขย้อนหลัง</div><div class="card"><form id="pbCreateForm" class="stack"><div class="field"><label>ชื่อสูตร Pre-batch</label><input name="name" maxlength="150" required placeholder="เช่น Coconut Fat-Washed Vodka"></div><div class="field"><label>สต๊อกผลผลิต (ต้องเป็นวัตถุดิบแยกต่างหาก)</label><select name="output" required><option value="">เลือกสต๊อกผลผลิต</option>${options}</select></div><div class="field"><label>หมายเหตุ / วิธีเตรียม</label><textarea name="notes" rows="3" placeholder="เช่น แช่แข็ง 8 ชั่วโมง แล้วกรอง"></textarea></div><div class="section-title">วัตถุดิบต่อหนึ่งสูตรมาตรฐาน</div><div id="pbRows"></div><button type="button" class="btn secondary" id="pbAdd">＋ เพิ่มวัตถุดิบ</button><button type="submit" class="btn full">บันทึกสูตร Pre-batch</button></form></div>`);
+ document.getElementById('pbBack').onclick=()=>{pbMode='list';pbRender()};
+ const rows=document.getElementById('pbRows');
+ const add=()=>{const d=document.createElement('div');d.className='ingredient-row';d.innerHTML=`<select required><option value="">เลือกวัตถุดิบ</option>${options}</select><input type="number" min="0.000001" step="any" required placeholder="ปริมาณ"><button type="button" class="btn danger smallbtn">×</button>`;d.querySelector('button').onclick=()=>d.remove();rows.appendChild(d)};add();document.getElementById('pbAdd').onclick=add;
+ document.getElementById('pbCreateForm').onsubmit=async e=>{
+  e.preventDefault();if(pbBusy)return;const f=e.target,name=f.elements.name.value.trim(),output=f.elements.output.value;
+  const items=[...rows.children].map(d=>({stock_id:d.children[0].value,quantity:Number(d.children[1].value)}));
+  if(!name||!output||!items.length||items.some(i=>!i.stock_id||!Number.isFinite(i.quantity)||i.quantity<=0||i.stock_id===output)||new Set(items.map(i=>i.stock_id)).size!==items.length){toast('ตรวจสอบวัตถุดิบ ห้ามซ้ำหรือใช้สต๊อกผลผลิตเป็นส่วนผสม');return}
+  pbBusy=true;const btn=f.querySelector('[type=submit]');btn.disabled=true;
+  try{const {error}=await glurSupabase.rpc('glur_save_prebatch_recipe',{p_shop_id:GLUR_SHOP_ID,p_name:name,p_output_stock_id:output,p_notes:f.elements.notes.value.trim(),p_ingredients:items});if(error)throw error;toast('สร้างสูตร Pre-batch แล้ว');pbMode='list';await pbLoad()}
+  catch(err){toast('สร้างสูตรไม่ได้: '+(err.message||err))}finally{pbBusy=false;btn.disabled=false}
+ };
+}
+function pbRenderProduce(){
+ const r=pbRecipes.find(x=>x.id===pbSelected);if(!r){pbMode='list';pbRender();return}
+ const out=pbStock(r.output_stock_id),baseCost=r.ingredients.reduce((a,i)=>a+num(i.quantity)*num(pbStock(i.stock_id)?.cost_per_unit),0);
+ shell('Pre-batch · '+esc(r.name),`<button class="back-link" id="pbBack">‹ กลับ</button><div class="card"><h3>${esc(r.name)}</h3><div class="small muted">ผลผลิตเข้าสต๊อก: ${esc(out?.name||'ไม่พบสต๊อก')} (${esc(out?.unit||'')})</div>${r.notes?`<div class="hint" style="white-space:pre-wrap">${esc(r.notes)}</div>`:''}<div class="section-title">ส่วนผสมต่อ 1 Batch มาตรฐาน</div>${pbIngredientRows(r)}<div class="tableline"><strong>ต้นทุนประมาณการต่อ Batch</strong><strong>${money(baseCost)}</strong></div></div>
+ <div class="card"><h3>บันทึกการผลิตจริง</h3><div class="hint">ระบบตัดวัตถุดิบตามตัวคูณที่ผลิต และรับผลผลิตตาม Yield จริง · บันทึกพร้อมกันในธุรกรรมเดียว</div><form id="pbProduceForm" class="stack"><div class="field"><label>จำนวน Batch ที่ผลิต (ตัวคูณสูตร)</label><input name="multiplier" type="number" min="0.000001" step="any" value="1" required></div><div class="field"><label>Yield จริงที่ได้ (${esc(out?.unit||'หน่วย')})</label><input name="yield" type="number" min="0.000001" step="any" placeholder="เช่น 650" required></div><div id="pbPreview" class="hint"></div><div class="field"><label>หมายเหตุล็อต / การกรอง</label><textarea name="notes" rows="2" maxlength="1000"></textarea></div><button class="btn full" type="submit" ${!out||pbBusy?'disabled':''}>ยืนยันผลิตและตัดสต๊อก</button></form></div>`);
+ document.getElementById('pbBack').onclick=()=>{pbMode='list';pbRender()};
+ const f=document.getElementById('pbProduceForm');const update=()=>{const m=Number(f.elements.multiplier.value),y=Number(f.elements.yield.value),cost=baseCost*m;document.getElementById('pbPreview').textContent=m>0&&y>0?`ตัดวัตถุดิบ ${m} เท่าของสูตร · ต้นทุนประมาณ ${money(cost)} · ต้นทุนผลผลิต ${money(cost/y)}/${out?.unit||''}`:'ระบุจำนวน Batch และ Yield จริง'};f.oninput=update;update();
+ f.onsubmit=async e=>{e.preventDefault();if(pbBusy)return;const m=Number(f.elements.multiplier.value),y=Number(f.elements.yield.value);if(!(m>0&&y>0&&Number.isFinite(m)&&Number.isFinite(y))){toast('ตรวจสอบปริมาณ');return}if(!confirm(`ยืนยันผลิต ${r.name}\nใช้วัตถุดิบ ${m} เท่าของสูตร\nผลผลิต ${y} ${out?.unit||''}?`))return;pbBusy=true;const btn=f.querySelector('[type=submit]');btn.disabled=true;try{const {error}=await glurSupabase.rpc('glur_produce_prebatch',{p_recipe_id:r.id,p_multiplier:m,p_yield:y,p_notes:f.elements.notes.value.trim()});if(error)throw error;toast('ผลิตสำเร็จ · ตัดวัตถุดิบและรับ Pre-batch แล้ว');pbMode='list';await Promise.all([loadCloudStock(),pbLoad()])}catch(err){toast('ผลิตไม่สำเร็จ: '+(err.message||err));btn.disabled=false}finally{pbBusy=false}};
+}
+const pbPrevRender=render;
+render=function(){if(!currentUser)return;if(page==='prebatch'){pbRender();return}pbPrevRender()};
+const pbPrevSetPage=setPage;
+setPage=function(p){pbPrevSetPage(p);if(p==='prebatch')pbLoad()};
+const pbPrevAuth=showAuthenticated;
+showAuthenticated=function(user){pbPrevAuth(user);pbMode='list';pbLoad()};
 
 initAuth();
 </script>
