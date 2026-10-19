@@ -510,17 +510,25 @@ let glurAccountLookupSerial=0;
 async function updateGlurAccount(user){
   const serial=++glurAccountLookupSerial;
   const el=document.getElementById('glurAccountText');
-  el.textContent='บัญชี '+user.id.slice(0,8)+'… · กำลังตรวจสอบสิทธิ์';
+  if(!el)return;
+  el.textContent='กำลังโหลดชื่อผู้ใช้งาน…';
   try{
-    const [{data:members,error:memberError},{data:usernames,error:nameError}]=await Promise.all([
+    const [membership,usernameResult,profileResult]=await Promise.all([
       glurSupabase.from('glur_members').select('role').eq('shop_id',GLUR_SHOP_ID).eq('user_id',user.id).limit(1),
-      glurSupabase.from('glur_usernames').select('username').eq('user_id',user.id).limit(1)
+      glurSupabase.from('glur_usernames').select('username').eq('user_id',user.id).limit(1),
+      glurSupabase.rpc('glur_employee_profiles_list',{p_shop_id:GLUR_SHOP_ID})
     ]);
     if(serial!==glurAccountLookupSerial||currentUser?.id!==user.id)return;
-    const role=memberError?'ตรวจสอบสิทธิ์ไม่ได้':(members?.[0]?.role||'ไม่พบสิทธิ์ในร้าน');
-    const name=!nameError&&usernames?.[0]?.username?usernames[0].username:'ID '+user.id.slice(0,8)+'…';
-    el.textContent=name+' · '+role;
-  }catch(e){if(serial===glurAccountLookupSerial)el.textContent='ID '+user.id.slice(0,8)+'… · ไม่สามารถโหลดสิทธิ์ได้'}
+    const role=membership.error?'ไม่สามารถตรวจสอบสิทธิ์':(membership.data?.[0]?.role||'ผู้ใช้งาน');
+    const profile=(!profileResult.error&&Array.isArray(profileResult.data))
+      ?profileResult.data.find(p=>p.user_id===user.id):null;
+    const displayName=String(profile?.display_name||'').trim();
+    const username=String(usernameResult.data?.[0]?.username||'').trim();
+    el.textContent=(displayName||username||'ผู้ใช้งาน')+' · '+role;
+  }catch(e){
+    if(serial===glurAccountLookupSerial&&currentUser?.id===user.id)
+      el.textContent='ผู้ใช้งาน · ไม่สามารถโหลดข้อมูลบัญชี';
+  }
 }
 async function glurLogout(){
   const out=document.getElementById('glurLogout');out.disabled=true;out.textContent='กำลังออก…';
