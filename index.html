@@ -1046,6 +1046,7 @@ function glurRenderResetPanel(){
  <div class="field"><label>เลือกหมวดที่ต้องการล้าง</label><select name="scope">${scopes.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
  <div class="field"><label>เหตุผล (อย่างน้อย 10 ตัวอักษร)</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required placeholder="เช่น ล้างข้อมูลทดสอบก่อนเปิดร้านจริง"></textarea></div>
  <div class="field"><label for="glurResetConfirmation">พิมพ์คำยืนยันลงในช่องด้านล่าง</label><div id="glurResetPhrase" class="hint" style="font-size:18px;font-weight:800;letter-spacing:1px;color:#ffd49a">RESET SALES</div><input id="glurResetConfirmation" type="text" name="confirmation" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="แตะตรงนี้แล้วพิมพ์ RESET ..." style="display:block!important;visibility:visible!important;opacity:1!important;width:100%;min-height:52px;background:#fff!important;color:#171514!important;border:3px solid #e88c32!important;font-size:18px!important;box-sizing:border-box;"></div>
+ <div class="field"><label>Username ของ Owner (ID ที่ใช้เข้าสู่ระบบ)</label><input name="ownerUsername" type="text" required pattern="[a-z0-9_]{3,30}" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="เช่น owner001"></div>
  <div class="field"><label>ยืนยันรหัสผ่าน Owner อีกครั้ง</label><input name="password" type="password" required autocomplete="current-password"></div>
  <label class="row small"><input type="checkbox" name="backup" required style="width:auto">ฉันสำรองฐานข้อมูล Supabase แยกต่างหากและเข้าใจว่าการลบย้อนกลับไม่ได้</label>
  <button class="btn danger full" type="submit">ล้างข้อมูลหมวดที่เลือก</button>
@@ -1064,16 +1065,15 @@ renderSettings=function(){
  document.getElementById('glurResetAuditRefresh').onclick=glurLoadResetAudit;
  form.onsubmit=async e=>{
   e.preventDefault();const scope=form.elements.scope.value,reason=form.elements.reason.value.trim();
-  const confirmation=form.elements.confirmation.value.trim(),password=form.elements.password.value;
+  const confirmation=form.elements.confirmation.value.trim(),password=form.elements.password.value,ownerUsername=form.elements.ownerUsername.value.trim().toLowerCase();
   if(reason.length<10||confirmation!=='RESET '+scope.toUpperCase()||!form.elements.backup.checked){toast('กรุณาตรวจสอบคำยืนยัน เหตุผล และการสำรองข้อมูล');return}
   if(!confirm('คำเตือน: ลบข้อมูล '+scope+' แบบถาวร และไม่คืนสต๊อกอัตโนมัติ ต้องการดำเนินการต่อหรือไม่?'))return;
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
    const {data:{session},error:sessionError}=await glurSupabase.auth.getSession();
    if(sessionError||!session)throw Error('กรุณาเข้าสู่ระบบใหม่');
-   const {data:usernameRows,error:usernameError}=await glurSupabase.from('glur_usernames').select('username').eq('user_id',currentUser.id).limit(1);
-   if(usernameError||!usernameRows?.[0]?.username)throw Error('ไม่สามารถตรวจสอบ Username ของ Owner ได้');
-   const response=await fetch(SUPABASE_URL+'/functions/v1/glur-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY},body:JSON.stringify({username:usernameRows[0].username,password})});
+   if(!/^[a-z0-9_]{3,30}$/.test(ownerUsername))throw Error('กรุณากรอก Username ของ Owner ให้ถูกต้อง');
+   const response=await fetch(SUPABASE_URL+'/functions/v1/glur-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY},body:JSON.stringify({username:ownerUsername,password})});
    const login=await response.json().catch(()=>({}));
    if(!response.ok||!login.access_token)throw Error('รหัสผ่าน Owner ไม่ถูกต้อง');
    const {data:verified,error:verifyError}=await glurSupabase.auth.getUser(login.access_token);
