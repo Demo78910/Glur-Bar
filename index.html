@@ -205,6 +205,41 @@ button,input,select,textarea{max-width:100%}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
+
+/* GLUR BAR 2026: intentional desktop/mobile visual system */
+:root{--bg:#100f0f;--panel:#1b1918;--panel2:#26211e;--line:#382e29;--muted:#a99c93;--gold:#e87c38;--gold2:#ffa66a}
+body{background:#100f0f;font-size:14px;line-height:1.55}
+.top{height:68px;min-height:68px;padding:12px 26px;background:#171311;box-shadow:none;border-bottom:1px solid #38271f}
+.brand{font-size:23px;letter-spacing:2.5px;text-shadow:none}.sub{font-size:9px;letter-spacing:1.6px}
+.glur-account{background:#151312;border-color:#302923;min-height:46px;padding-left:26px;padding-right:26px}
+.wrap{max-width:none!important;width:100%;padding-top:30px!important}
+.page-title{font-size:26px;font-weight:800;letter-spacing:-.6px;margin:0 0 8px}
+.card{background:#1b1918;border:1px solid #38302b;border-radius:16px;box-shadow:none;padding:18px}
+.grid{gap:14px}.metric-label{font-size:12px;color:#b9a99e}.metric{font-size:clamp(22px,2.2vw,31px);font-variant-numeric:tabular-nums;letter-spacing:-.7px;margin-top:10px}
+.section-title{font-size:16px;margin:23px 0 11px}.btn.secondary{background:#27211e;color:#f5c6a7;border-color:#594032}.btn{border-radius:11px;min-height:40px}
+.nav{background:#171413;box-shadow:none;border-color:#322924}.nav button.active{background:#7f381e;border-color:#bb6034}
+.nav button{transition:background .16s,color .16s}.nav .nav-group{letter-spacing:1px}
+.dashboard-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}
+.dashboard-eyebrow{font-size:12px;color:#d4a27f;margin-top:2px}
+.dashboard-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.dashboard-stats .card{margin:0;min-height:130px;padding:19px 20px;position:relative}
+.dashboard-stats .card:first-child{background:linear-gradient(125deg,#4b281b,#2a1d18);border-color:#92522e}
+.dashboard-stats .card:first-child .metric{color:#ffb077}
+.dashboard-main{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(290px,1fr);gap:18px;margin-top:20px;align-items:start}
+.dashboard-panel{background:#1a1817;border:1px solid #38302b;border-radius:16px;padding:20px;min-height:220px}
+.dashboard-panel h3{font-size:16px;margin:0 0 5px}.dashboard-panel .panel-sub{font-size:12px;color:#ac9c90;margin-bottom:17px}
+.dashboard-panel .empty{padding:32px 10px;color:#c3b1a5;background:#211d1b;border:1px dashed #48382e;border-radius:12px}
+.dashboard-quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.dashboard-quick .btn{display:flex;justify-content:space-between;align-items:center;text-align:left;padding:13px 15px;min-height:60px;font-weight:700}
+.dashboard-quick .btn::after{content:'↗';font-size:18px;opacity:.7}
+.dashboard-notice{margin-top:18px;border:1px solid #5b4230;border-radius:11px;padding:12px 15px;background:#2a201b;color:#dcb59c;font-size:12px}
+@media(min-width:850px){.wrap{padding-left:clamp(248px,16vw,285px)!important;padding-right:clamp(24px,4vw,72px)!important}.nav{width:220px;max-width:220px!important;padding:20px 12px}.top{padding-left:26px}}
+@media(min-width:1500px){.dashboard-main{grid-template-columns:minmax(0,1.8fr) minmax(340px,.9fr)}}
+@media(max-width:1100px){.dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-main{grid-template-columns:1fr}}
+@media(max-width:849px){.wrap{padding:22px 18px 115px!important}.dashboard-main{grid-template-columns:1fr}.top{height:64px;min-height:64px}}
+@media(max-width:600px){.wrap{padding:18px 12px 115px!important}.top{padding:11px 15px}.glur-account{padding:8px 12px}.page-title{font-size:23px}.dashboard-head{align-items:flex-start}.dashboard-head .btn{flex-shrink:0}.dashboard-stats{gap:9px}.dashboard-stats .card{padding:14px;min-height:112px}.dashboard-stats .metric{font-size:clamp(19px,5vw,25px)}.dashboard-main{gap:12px;margin-top:14px}.dashboard-panel{padding:15px;min-height:0}.dashboard-quick .btn{padding:11px;font-size:12px;min-height:54px}.dashboard-notice{font-size:11px}}
+@media(max-width:360px){.dashboard-stats{grid-template-columns:1fr 1fr}.dashboard-quick{grid-template-columns:1fr 1fr}}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -1047,11 +1082,13 @@ function glurFinanceNote(){return glurFinanceError?`<div class="hint warn">โ�
  !glurFinanceReady?'<div class="hint">กำลังโหลดข้อมูลยอดขายออนไลน์…</div>':
  '<div class="hint">ยอดขายและต้นทุนมาจาก Supabase · ค่าใช้จ่ายอื่นยังมาจากเบราว์เซอร์เครื่องนี้ จึงไม่ใช่กำไรสุทธิรวมทุกเครื่อง</div>'}
 function renderDashboard(){
- const m=monthNow(),v=glurFinanceStats(m),ex=sum(monthExpenses(m),x=>num(x.amount));
- shell('ภาพรวมร้าน',`<div class="row between"><span class="muted small">${m} · ยอดขายออนไลน์</span><button class="btn secondary smallbtn" id="financeRefresh">↻ รีเฟรช</button></div>
- <div class="grid" style="margin-top:12px">${metric('ยอดขายเดือนนี้',glurFinanceReady?money(v.revenue):'—')}${metric('ต้นทุนสินค้าที่ขาย',glurFinanceReady?money(v.cost):'—')}${metric('กำไรขั้นต้น',glurFinanceReady?money(v.revenue-v.cost):'—')}${metric('จำนวนแก้วที่ขาย',glurFinanceReady?v.qty.toLocaleString('th-TH'):'—')}</div>
- ${glurFinanceNote()}<div class="section-title">สต๊อกใกล้หมด</div><div class="card">${(()=>{const low=cloudStock.filter(s=>num(s.quantity)<=num(s.min_quantity));return low.length?low.map(s=>`<div class="item"><div class="item-name">${esc(s.name)}</div><strong class="warn">${num(s.quantity)} ${esc(s.unit)}</strong></div>`).join(''):empty('ไม่มีรายการสต๊อกใกล้หมด')})()}</div>
- <div class="section-title">ทางลัด</div><div class="grid"><button class="btn secondary" onclick="setPage('stock')">สต๊อก</button><button class="btn secondary" onclick="setPage('recipes')">สูตร</button><button class="btn secondary" onclick="setPage('sales')">ขาย</button><button class="btn secondary" onclick="setPage('reports')">รายงาน</button></div>`);
+ const m=monthNow(),v=glurFinanceStats(m),low=cloudStock.filter(s=>num(s.quantity)<=num(s.min_quantity));
+ const summary=`<div class="dashboard-head"><div><div class="dashboard-eyebrow">ภาพรวมการดำเนินงาน · ${esc(m)}</div></div><button class="btn secondary smallbtn" id="financeRefresh">↻ รีเฟรชข้อมูล</button></div>`;
+ const kpis=`<div class="dashboard-stats">${metric('ยอดขายเดือนนี้',glurFinanceReady?money(v.revenue):'—')}${metric('ต้นทุนเครื่องดื่ม',glurFinanceReady?money(v.cost):'—')}${metric('กำไรขั้นต้น',glurFinanceReady?money(v.revenue-v.cost):'—')}${metric('จำนวนแก้วที่ขาย',glurFinanceReady?v.qty.toLocaleString('th-TH')+' แก้ว':'—')}</div>`;
+ const lowStock=low.length?low.slice(0,7).map(s=>`<div class="item"><div class="item-name">${esc(s.name)}</div><strong class="warn">${num(s.quantity)} ${esc(s.unit)}</strong></div>`).join(''):`<div class="empty">✓ ไม่มีวัตถุดิบที่ต่ำกว่าระดับแจ้งเตือน</div>`;
+ const main=`<div class="dashboard-main"><section class="dashboard-panel"><h3>สต็อกที่ต้องดูแล</h3><div class="panel-sub">วัตถุดิบที่เหลือน้อยหรือถึงระดับแจ้งเตือน · ${low.length} รายการ</div>${lowStock}${low.length>7?`<div class="small muted">และอีก ${low.length-7} รายการ</div>`:''}<div style="margin-top:14px"><button class="btn secondary smallbtn" onclick="setPage('stock')">ดูสต็อกทั้งหมด →</button></div></section><section class="dashboard-panel"><h3>เริ่มทำงาน</h3><div class="panel-sub">เข้าถึงงานที่ใช้บ่อยได้ในคลิกเดียว</div><div class="dashboard-quick"><button class="btn secondary" onclick="setPage('sales')">บันทึกการขาย</button><button class="btn secondary" onclick="setPage('receiving')">รับสินค้า</button><button class="btn secondary" onclick="setPage('recipes')">จัดการสูตร</button><button class="btn secondary" onclick="setPage('reports')">ดูรายงาน</button></div></section></div>`;
+ const notice=glurFinanceError?`<div class="dashboard-notice">โหลดข้อมูลยอดขายไม่สำเร็จ: ${esc(glurFinanceError)}</div>`:!glurFinanceReady?`<div class="dashboard-notice">กำลังโหลดข้อมูลยอดขายจาก Supabase…</div>`:`<div class="dashboard-notice">ยอดขายและต้นทุนมาจาก Supabase · กำไรที่แสดงเป็นกำไรขั้นต้น ยังไม่หักค่าใช้จ่ายอื่น</div>`;
+ shell('ภาพรวมร้าน',summary+kpis+main+notice);
  document.getElementById('financeRefresh').onclick=glurLoadFinance;
 }
 function renderReports(){
