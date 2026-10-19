@@ -132,7 +132,8 @@ input::placeholder,textarea::placeholder{color:#89776d}
 <div id="glurAccount" class="glur-account hidden" aria-label="ข้อมูลบัญชีผู้ใช้"><span id="glurAccountText">กำลังตรวจสอบสิทธิ์…</span><button type="button" id="glurLogout" class="btn secondary smallbtn">ออกจากระบบ</button></div>
 <main class="wrap" id="app"></main>
 <nav class="nav" id="nav">
-<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="prebatch"><span>⚗</span>Pre-batch</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="closing"><span>✓</span>ปิดยอด</button><button data-page="profit"><span>↗</span>กำไร</button><button data-page="closing-report"><span>▦</span>สรุปปิดยอด</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
+<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="prebatch"><span>⚗</span>Pre-batch</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="closing"><span>✓</span>ปิดยอด</button><button data-page="profit"><span>↗</span>กำไร</button><button data-page="closing-report"><span>▦</span>สรุปปิดยอด</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="activity-audit" class="hidden">กิจกรรมพนักงาน</button>
+<button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
 </nav>
 <div id="toast" class="toast hidden" role="status"></div>
 <script>
@@ -1276,6 +1277,52 @@ render=function(){
  }
  glurFinanceRenderBefore();
 };
+
+
+// GLUR BAR Employee Activity & Closing Audit v1: read-only owner view.
+let glurActivityRows=[],glurActivityError='',glurActivityBusy=false;
+function glurActivityDate(t){try{return new Date(t).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}catch(e){return String(t||'')}}
+async function glurLoadActivity(){
+ if(glurAdjustRole!=='owner')return;
+ glurActivityBusy=true;glurActivityError='';
+ const filter=document.getElementById('glurActivityFilter')?.value||'all';
+ try{
+  let q=glurSupabase.from('glur_activity_audit')
+   .select('id,happened_at,actor_user_id,actor_username,actor_display_name,actor_role,action,entity_table,entity_id,details')
+   .eq('shop_id',GLUR_SHOP_ID).order('happened_at',{ascending:false}).limit(300);
+  if(filter!=='all')q=q.eq('entity_table',filter);
+  const {data,error}=await q;if(error)throw error;glurActivityRows=data||[];
+ }catch(e){glurActivityRows=[];glurActivityError=e.message||String(e)}
+ finally{glurActivityBusy=false;if(page==='activity-audit')renderGlurActivity()}
+}
+function renderGlurActivity(){
+ if(glurAdjustRole!=='owner'){shell('Employee Activity','<div class="hint">เฉพาะ Owner เท่านั้น</div>');return}
+ const choices=[['all','ทุกหมวด'],['glur_sales','ยอดขาย'],['glur_stock','สต๊อก'],['glur_stock_receipts','รับเข้า'],['glur_expenses','ค่าใช้จ่าย'],['glur_daily_closings','ปิดยอด'],['glur_recipes','สูตรเครื่องดื่ม'],['glur_prebatch_recipes','Pre-batch'],['glur_prebatch_batches','การผลิต Pre-batch'],['glur_employee_profiles','ชื่อพนักงาน'],['glur_members','สิทธิ์พนักงาน']];
+ const previous=document.getElementById('glurActivityFilter')?.value||'all';
+ const actionNames={INSERT:'เพิ่ม',UPDATE:'แก้ไข',DELETE:'ลบ'};
+ const rows=glurActivityRows.map(x=>{
+  const who=x.actor_display_name||x.actor_username||'ไม่ทราบผู้ทำรายการ';
+  const details=x.details||{};
+  const safe=(v)=>esc(JSON.stringify(v??{},null,2));
+  return `<div class="card"><div class="row between"><strong>${esc(actionNames[x.action]||x.action)} · ${esc(x.entity_table)}</strong><span class="small muted">#${esc(x.id)}</span></div>
+   <div class="small muted">${esc(glurActivityDate(x.happened_at))} · ${esc(who)} ${x.actor_username?'(@'+esc(x.actor_username)+')':''} · ${esc(x.actor_role||'ไม่ระบุตำแหน่ง')}</div>
+   <div class="small muted">รหัสรายการ: ${esc(x.entity_id||'—')} · ผู้ทำรายการ ID: ${esc(x.actor_user_id||'ไม่ทราบ')}</div>
+   <details><summary class="small">ดูรายละเอียดก่อน/หลัง</summary><div class="small muted">ก่อน:</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">${safe(details.before)}</pre><div class="small muted">หลัง:</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">${safe(details.after)}</pre></details></div>`
+ }).join('');
+ shell('กิจกรรมพนักงาน · Audit',`<div class="hint">อ่านอย่างเดียว · เฉพาะ Owner · แสดง 300 รายการล่าสุด · เริ่มบันทึกตั้งแต่วันที่ติดตั้ง SQL (ไม่สร้างประวัติย้อนหลัง)</div>
+ <div class="card"><div class="field"><label>หมวดรายการ</label><select id="glurActivityFilter">${choices.map(([v,t])=>`<option value="${v}" ${v===previous?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+ <button class="btn full" id="glurActivityRefresh" ${glurActivityBusy?'disabled':''}>${glurActivityBusy?'กำลังโหลด…':'↻ โหลดประวัติ'}</button>${glurActivityError?`<div class="hint warn">${esc(glurActivityError)}</div>`:''}</div>
+ <div class="section-title">กิจกรรมล่าสุด (${glurActivityRows.length})</div>${rows||empty('ยังไม่มีกิจกรรมหลังติดตั้ง หรือไม่พบรายการในหมวดนี้')}
+ <div class="hint">การบันทึกจาก service role อาจไม่ทราบผู้ทำรายการ · ระบบไม่บันทึกรหัสผ่านหรือ Token · การอ่านประวัติไม่เปลี่ยนสต๊อกหรือยอดขาย</div>`);
+ document.getElementById('glurActivityRefresh').onclick=glurLoadActivity;
+ document.getElementById('glurActivityFilter').onchange=glurLoadActivity;
+}
+const glurActivityOldRender=render;
+render=function(){if(!currentUser)return;if(page==='activity-audit'){renderGlurActivity();return}glurActivityOldRender()};
+const glurActivityOldSetPage=setPage;
+setPage=function(p){if(p==='activity-audit'&&glurAdjustRole!=='owner'){toast('เฉพาะ Owner เท่านั้น');return}glurActivityOldSetPage(p);if(p==='activity-audit')glurLoadActivity()};
+const glurActivityOldAccess=glurLoadAdjustmentAccess;
+glurLoadAdjustmentAccess=async function(){await glurActivityOldAccess();document.querySelectorAll('#nav button[data-page="activity-audit"]').forEach(b=>b.classList.toggle('hidden',glurAdjustRole!=='owner'));if(page==='activity-audit'&&glurAdjustRole!=='owner')setPage('dashboard')};
 
 initAuth();
 </script>
