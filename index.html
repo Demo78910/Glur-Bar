@@ -1077,9 +1077,9 @@ async function glurLoadResetAudit(){
 }
 function glurRenderResetPanel(){
  if(glurAdjustRole!=='owner')return '';
- const scopes=[['sales','ยอดขายและประวัติปรับยอดขาย'],['expenses','ค่าใช้จ่ายและประวัติยกเลิก'],['prebatch','สูตร Pre-batch และประวัติผลิต'],['recipes','สูตรเครื่องดื่ม'],['stock','สต๊อกและประวัติสต๊อก'],['all','ข้อมูลธุรกิจทั้งหมด (คงบัญชีและสิทธิ์ไว้)']];
+ const scopes=[['sales','ยอดขายและประวัติปรับยอดขาย'],['expenses','ค่าใช้จ่ายและประวัติยกเลิก'],['prebatch','สูตร Pre-batch และประวัติผลิต'],['recipes','สูตรเครื่องดื่ม'],['stock','สต๊อกและประวัติสต๊อก'],['closing','ประวัติปิดยอด (Snapshot)'],['all','ข้อมูลธุรกิจทั้งหมด (คงบัญชีและสิทธิ์ไว้)']];
  return `<div class="section-title">จัดการข้อมูล · เฉพาะ Owner</div><div class="card" style="border-color:#a74b42">
- <div class="hint warn">การลบเป็นการลบจริงและไม่คืนยอดสต๊อกอัตโนมัติ · บางหมวดอาจถูกปฏิเสธหากยังมีข้อมูลที่เชื่อมโยงกัน · ต้องสำรองข้อมูลและตรวจสอบก่อน</div>
+ <div class="hint warn">การล้างยอดขาย/ค่าใช้จ่ายจะถูกปฏิเสธถ้ายังมีประวัติปิดยอด ต้องล้างหมวดปิดยอดก่อนโดยเจตนา หรือเลือก RESET ALL หลังสำรองข้อมูล · การลบเป็นการลบจริงและไม่คืนยอดสต๊อกอัตโนมัติ · บางหมวดอาจถูกปฏิเสธหากยังมีข้อมูลที่เชื่อมโยงกัน · ต้องสำรองข้อมูลและตรวจสอบก่อน</div>
  <form id="glurResetForm" class="stack" autocomplete="off">
  <div class="field"><label>เลือกหมวดที่ต้องการล้าง</label><select name="scope">${scopes.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
  <div class="field"><label>เหตุผล (อย่างน้อย 10 ตัวอักษร)</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required placeholder="เช่น ล้างข้อมูลทดสอบก่อนเปิดร้านจริง"></textarea></div>
@@ -1240,6 +1240,33 @@ const glurCRPriorRender=render;
 render=function(){if(!currentUser)return;if(page==='closing-report'){renderGlurClosingReport();return}glurCRPriorRender()};
 const glurCRPriorSetPage=setPage;
 setPage=function(p){glurCRPriorSetPage(p);if(p==='closing-report'&&!glurCRLoaded&&!glurCRBusy){const d=glurCRDefaults();glurCRLoad(glurCRFrom||d[0],glurCRTo||d[1])}};
+
+
+// Closing/Profit permissions v2. UI gate supplements server RLS and RPC checks.
+function glurFinanceNavGuard(){
+ const allowed=glurCanAdjust();
+ for(const name of ['closing','profit','closing-report']){
+  document.querySelectorAll('#nav button[data-page="'+name+'"]').forEach(b=>b.classList.toggle('hidden',!allowed));
+ }
+ if(!allowed&&['closing','profit','closing-report'].includes(page))setPage('dashboard');
+}
+const glurFinanceAccessBefore=glurLoadAdjustmentAccess;
+glurLoadAdjustmentAccess=async function(){await glurFinanceAccessBefore();glurFinanceNavGuard()};
+const glurFinancePageBefore=setPage;
+setPage=function(p){
+ if(['closing','profit','closing-report'].includes(p)&&!glurCanAdjust()){
+  toast('รายงานการเงินและปิดยอด: เฉพาะ Owner / Manager');return;
+ }
+ glurFinancePageBefore(p);
+};
+const glurFinanceRenderBefore=render;
+render=function(){
+ if(['closing','profit','closing-report'].includes(page)&&!glurCanAdjust()){
+  page='dashboard';
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page==='dashboard'));
+ }
+ glurFinanceRenderBefore();
+};
 
 initAuth();
 </script>
