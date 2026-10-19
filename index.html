@@ -1201,7 +1201,7 @@ function renderGlurProfit(){
 }
 async function glurLoadClosings(){
  if(glurClosingBusy)return;glurClosingBusy=true;glurClosingError='';
- try{const {data,error}=await glurSupabase.from('glur_daily_closings').select('id,business_date,revenue,cogs,gross_profit,expenses,profit_after_expenses,drinks_sold,sale_transactions,note,closed_by,closer_display_name,closer_username,closed_at').eq('shop_id',GLUR_SHOP_ID).order('business_date',{ascending:false}).limit(90);if(error)throw error;glurClosingRows=data||[]}
+ try{const rows=[];for(let start=0;start<10000;start+=500){const {data,error}=await glurSupabase.from('glur_daily_closings').select('id,business_date,revenue,cogs,gross_profit,expenses,profit_after_expenses,drinks_sold,sale_transactions,note,closed_by,closer_display_name,closer_username,closed_at').eq('shop_id',GLUR_SHOP_ID).order('business_date',{ascending:false}).range(start,start+499);if(error)throw error;rows.push(...(data||[]));if(!data||data.length<500)break}glurClosingRows=rows}
  catch(e){glurClosingError=e.message||String(e)}
  finally{glurClosingBusy=false;if(page==='closing')renderGlurClosing()}
 }
@@ -1211,8 +1211,20 @@ function renderGlurClosing(){
  ${allowed?`<div class="card"><form id="glurCloseForm" class="stack"><div class="field"><label>วันที่ทำการ</label><input name="businessDate" type="date" max="${glurPreviousBusinessDay()}" value="${esc(date)}" required></div><div class="field"><label>บันทึกปิดกะ</label><textarea name="note" rows="2" maxlength="1000" placeholder="เช่น ตรวจยอดขายแล้ว / หมายเหตุส่วนต่าง"></textarea></div><button class="btn full" type="submit" ${glurClosingBusy?'disabled':''}>บันทึกปิดยอดวันนี้ (ครั้งเดียว)</button></form></div>`:'<div class="hint">เฉพาะ Owner / Manager ที่ปิดยอดได้</div>'}
  <div class="row between"><strong>ประวัติการปิดยอด</strong><button id="glurClosingReload" class="btn secondary smallbtn">↻ รีเฟรช</button></div>
  ${glurClosingError?`<div class="hint warn">${esc(glurClosingError)}</div>`:''}
- <div class="card">${glurClosingRows.length?glurClosingRows.map(x=>`<div class="item" style="display:block"><strong>${esc(x.business_date)}</strong><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ${esc(x.closer_display_name||'ไม่บันทึกชื่อ ณ วันปิด')} · @${esc(x.closer_username||'ไม่ทราบไอดี')}</div>${[['ยอดขาย',x.revenue],['ต้นทุนขาย',x.cogs],['กำไรขั้นต้น',x.gross_profit],['ค่าใช้จ่าย',x.expenses],['กำไรหลังหักค่าใช้จ่าย',x.profit_after_expenses]].map(([n,v])=>`<div class="tableline"><span>${n}</span><strong>${glurMoneySafe(v)}</strong></div>`).join('')}<div class="small muted">${esc(x.drinks_sold)} แก้ว · ${esc(x.sale_transactions)} รายการ</div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}</div>`).join(''):empty('ยังไม่มีประวัติการปิดยอด')}</div>
+ <div class="card">${glurClosingRows.length?glurClosingRows.map(x=>`<div class="item" style="display:block"><strong>${esc(x.business_date)}</strong><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ${esc(x.closer_display_name||'ไม่บันทึกชื่อ ณ วันปิด')} · @${esc(x.closer_username||'ไม่ทราบไอดี')}</div>${[['ยอดขาย',x.revenue],['ต้นทุนขาย',x.cogs],['กำไรขั้นต้น',x.gross_profit],['ค่าใช้จ่าย',x.expenses],['กำไรหลังหักค่าใช้จ่าย',x.profit_after_expenses]].map(([n,v])=>`<div class="tableline"><span>${n}</span><strong>${glurMoneySafe(v)}</strong></div>`).join('')}<div class="small muted">${esc(x.drinks_sold)} แก้ว · ${esc(x.sale_transactions)} รายการ</div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}${glurAdjustRole==='owner'?`<button type="button" class="btn secondary smallbtn glur-delete-closing" data-closing-id="${esc(x.id)}" data-closing-date="${esc(x.business_date)}" style="margin-top:9px">ลบการปิดยอดวันนี้ (Owner)</button>`:''}</div>`).join(''):empty('ยังไม่มีประวัติการปิดยอด')}</div>
  <div class="hint">หากมีการแก้ไขยอดขายหรือค่าใช้จ่ายย้อนหลังหลังปิดยอด Snapshot จะไม่เปลี่ยนโดยอัตโนมัติ ให้เปรียบเทียบกับรายงาน Profit Analytics เพื่อหาความต่าง</div>`);
+ document.querySelectorAll('.glur-delete-closing').forEach(btn=>btn.onclick=async()=>{
+  if(glurAdjustRole!=='owner'){toast('เฉพาะ Owner เท่านั้น');return}
+  const id=btn.dataset.closingId,day=btn.dataset.closingDate;
+  const reason=prompt('ระบุเหตุผลที่ต้องลบการปิดยอดวันที่ '+day+' (อย่างน้อย 5 ตัวอักษร)');
+  if(reason===null)return;
+  if(reason.trim().length<5){toast('กรุณาระบุเหตุผลอย่างน้อย 5 ตัวอักษร');return}
+  if(!confirm('ยืนยันลบเฉพาะบันทึกปิดยอดวันที่ '+day+'?\nยอดขาย สต๊อก และค่าใช้จ่ายจะไม่ถูกลบ\nระบบจะเก็บประวัติการลบไว้'))return;
+  btn.disabled=true;
+  try{const {error}=await glurSupabase.rpc('glur_owner_delete_daily_closing',{p_shop_id:GLUR_SHOP_ID,p_closing_id:id,p_reason:reason.trim()});if(error)throw error;toast('ลบรายการปิดยอดสำเร็จ');await glurLoadClosings()}
+  catch(err){toast('ลบการปิดยอดไม่สำเร็จ: '+(err.message||err))}
+  finally{btn.disabled=false}
+ });
  document.getElementById('glurClosingReload').onclick=glurLoadClosings;
  const form=document.getElementById('glurCloseForm');
  if(form)form.onsubmit=async e=>{
