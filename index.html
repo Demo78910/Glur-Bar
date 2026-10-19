@@ -1537,7 +1537,8 @@ const glurMonthlyOldSetPage=setPage;
 setPage=function(p){glurMonthlyOldSetPage(p);if(p==='reports'&&glurCanAdjust()&&!glurMonthlyData&&!glurMonthlyBusy)glurMonthlyLoad(glurMonthlySelected||glurThaiBusinessToday().slice(0,7))};
 
 </script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
 // Smart Owner Control: inspect dependencies before deletion; no automatic cascade.
 async function glurOwnerStockArchive(sid,active){
  if(glurAdjustRole!=='owner'){toast('เฉพาะ Owner เท่านั้น');return}
