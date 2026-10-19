@@ -513,21 +513,18 @@ async function updateGlurAccount(user){
   if(!el)return;
   el.textContent='กำลังโหลดชื่อผู้ใช้งาน…';
   try{
-    const [membership,usernameResult,profileResult]=await Promise.all([
-      glurSupabase.from('glur_members').select('role').eq('shop_id',GLUR_SHOP_ID).eq('user_id',user.id).limit(1),
-      glurSupabase.from('glur_usernames').select('username').eq('user_id',user.id).limit(1),
-      glurSupabase.rpc('glur_employee_profiles_list',{p_shop_id:GLUR_SHOP_ID})
-    ]);
+    const {data,error}=await glurSupabase.rpc('glur_my_employee_identity',{p_shop_id:GLUR_SHOP_ID});
     if(serial!==glurAccountLookupSerial||currentUser?.id!==user.id)return;
-    const role=membership.error?'ไม่สามารถตรวจสอบสิทธิ์':(membership.data?.[0]?.role||'ผู้ใช้งาน');
-    const profile=(!profileResult.error&&Array.isArray(profileResult.data))
-      ?profileResult.data.find(p=>p.user_id===user.id):null;
-    const displayName=String(profile?.display_name||'').trim();
-    const username=String(usernameResult.data?.[0]?.username||'').trim();
-    el.textContent=(displayName||username||'ผู้ใช้งาน')+' · '+role;
+    if(error)throw error;
+    const identity=Array.isArray(data)?data[0]:data;
+    const name=String(identity?.display_name||identity?.username||'ผู้ใช้งาน').trim();
+    const role=String(identity?.role||'ผู้ใช้งาน').trim();
+    el.textContent=name+' · '+role;
   }catch(e){
-    if(serial===glurAccountLookupSerial&&currentUser?.id===user.id)
-      el.textContent='ผู้ใช้งาน · ไม่สามารถโหลดข้อมูลบัญชี';
+    if(serial===glurAccountLookupSerial&&currentUser?.id===user.id){
+      el.textContent='ไม่สามารถโหลดชื่อผู้ใช้งาน';
+      console.warn('GLUR BAR: employee identity lookup failed',e);
+    }
   }
 }
 async function glurLogout(){
