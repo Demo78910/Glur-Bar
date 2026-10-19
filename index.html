@@ -145,14 +145,14 @@ const glurSupabase = window.supabase.createClient(
   SUPABASE_KEY
 );
 'use strict';
-const KEY='glurBarApp_v1';
+// Legacy local data is intentionally not loaded or written. Cloud is the source of truth.
 const blank=()=>({stock:[],recipes:[],sales:[],receipts:[],expenses:[]});
-let db=loadDB(),page='dashboard';
+let db=blank(),page='dashboard';
 const GLUR_SHOP_ID='bdd83213-8d38-42d7-bd35-835506dc25ac';
 let cloudStock=[],cloudReady=false,cloudError='';
 
-function loadDB(){try{return {...blank(),...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch(e){return blank()}}
-function saveDB(){localStorage.setItem(KEY,JSON.stringify(db))}
+function loadDB(){return blank()}
+function saveDB(){throw Error('Legacy local writes are disabled; use Supabase')}
 function id(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function money(n){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',maximumFractionDigits:2}).format(Number(n)||0)}
@@ -934,6 +934,33 @@ const glurFinancePreviousSetPage=setPage;
 setPage=function(p){glurFinancePreviousSetPage(p);if((p==='dashboard'||p==='reports')&&!glurFinanceReady)glurLoadFinance()};
 const glurFinancePreviousLoadSales=loadGlurSales;
 loadGlurSales=async function(){await glurFinancePreviousLoadSales();if(glurSalesReady)glurLoadFinance()};
+
+
+// GLUR BAR Cloud Expenses + cloud-only backup/status. No localStorage business writes.
+let glurExpenses=[],glurExpensesReady=false,glurExpensesError='',glurExpensesBusy=false;
+async function glurLoadExpenses(){
+ if(!currentUser)return;
+ const {data,error}=await glurSupabase.from('glur_expenses').select('id,shop_id,name,amount,expense_date,created_at,created_by').eq('shop_id',GLUR_SHOP_ID).order('expense_date',{ascending:false}).limit(1000);
+ if(error){glurExpensesError=error.message;glurExpensesReady=false}else{glurExpenses=data||[];glurExpensesError='';glurExpensesReady=true}
+ if(page==='costs')renderCosts();
+}
+function renderCosts(){
+ shell('ค่าใช้จ่าย · Supabase',`<div class="hint">ข้อมูลค่าใช้จ่ายจัดเก็บออนไลน์ ทุกเครื่องที่มีสิทธิ์เห็นตรงกัน · ต้องติดตั้ง SQL สำหรับ glur_expenses ก่อนใช้งาน</div>${glurExpensesError?`<div class="hint warn">โหลดข้อมูลไม่ได้: ${esc(glurExpensesError)}</div>`:''}<div class="card"><h3>เพิ่มค่าใช้จ่าย</h3><form id="expenseCloudForm" class="stack"><div class="field"><label>รายการ</label><input name="name" maxlength="200" required placeholder="เช่น น้ำแข็ง"></div><div class="formgrid"><div class="field"><label>จำนวนเงิน (บาท)</label><input name="amount" type="number" step="0.01" min="0" required></div><div class="field"><label>วันที่</label><input name="expense_date" type="date" value="${dateNow()}" required></div></div><button type="submit" class="btn full" ${glurExpensesBusy?'disabled':''}>บันทึกค่าใช้จ่ายออนไลน์</button></form></div><div class="row between"><strong>รายการล่าสุด</strong><button class="btn secondary smallbtn" id="expenseRefresh">↻ รีเฟรช</button></div><div class="card">${!glurExpensesReady&&!glurExpensesError?'กำลังโหลด…':glurExpenses.map(x=>`<div class="item"><div><strong>${esc(x.name)}</strong><div class="small muted">${esc(x.expense_date)}</div></div><div class="actions"><strong>${money(x.amount)}</strong>${glurCanAdjust()?`<button class="btn danger smallbtn" data-expense-delete="${esc(x.id)}">ลบ</button>`:''}</div></div>`).join('')||empty('ยังไม่มีค่าใช้จ่าย')}</div>`);
+ document.getElementById('expenseRefresh').onclick=glurLoadExpenses;
+ document.getElementById('expenseCloudForm').onsubmit=async e=>{e.preventDefault();if(glurExpensesBusy)return;const d=new FormData(e.target),name=String(d.get('name')||'').trim(),amount=Number(d.get('amount')),expense_date=String(d.get('expense_date')||'');if(!name||!Number.isFinite(amount)||amount<0||!/^\d{4}-\d{2}-\d{2}$/.test(expense_date)){toast('ตรวจสอบข้อมูล');return}glurExpensesBusy=true;try{const {data,error}=await glurSupabase.from('glur_expenses').insert({shop_id:GLUR_SHOP_ID,name,amount,expense_date}).select('id').single();if(error||!data)throw error||Error('ไม่ได้รับสิทธิ์บันทึก');toast('บันทึกค่าใช้จ่ายออนไลน์แล้ว');await glurLoadExpenses()}catch(err){toast('บันทึกไม่สำเร็จ: '+(err?.message||err))}finally{glurExpensesBusy=false;if(page==='costs')renderCosts()}};
+ document.querySelectorAll('[data-expense-delete]').forEach(b=>b.onclick=async()=>{if(!glurCanAdjust())return;const x=glurExpenses.find(e=>e.id===b.dataset.expenseDelete);if(!x||!confirm('ลบค่าใช้จ่าย '+x.name+' จำนวน '+money(x.amount)+' อย่างถาวร?'))return;b.disabled=true;const {data,error}=await glurSupabase.from('glur_expenses').delete().eq('shop_id',GLUR_SHOP_ID).eq('id',x.id).select('id');if(error||!data?.length){toast('ลบไม่ได้: '+(error?.message||'ไม่มีสิทธิ์'));b.disabled=false;return}toast('ลบค่าใช้จ่ายแล้ว');await glurLoadExpenses()});
+}
+function renderSettings(){
+ shell('ข้อมูล Cloud และสำรองข้อมูล',`<div class="hint">GLUR BAR ใช้ Supabase เป็นฐานข้อมูลหลัก ไม่ใช้ localStorage เก็บข้อมูลธุรกิจแล้ว · การดาวน์โหลดเป็นไฟล์สำรองสำหรับเก็บไว้เท่านั้น ไม่ใช่การสำรองทั้งฐานข้อมูลหรือสมาชิก</div><div class="grid">${metric('วัตถุดิบ',cloudStock.length+' รายการ')}${metric('สูตร',cloudRecipes.length+' สูตร')}${metric('ยอดขายที่โหลด',glurSales.length+' รายการ')}${metric('ค่าใช้จ่ายที่โหลด',glurExpenses.length+' รายการ')}</div><div class="card"><button class="btn full" id="glurExportCloud">ดาวน์โหลดข้อมูล Cloud ที่โหลดได้ (JSON)</button><p class="small muted">ข้อมูลยอดขายและค่าใช้จ่ายอาจถูกจำกัดจำนวนตามการโหลด ไม่ใช่ไฟล์กู้คืน Supabase โดยอัตโนมัติ</p><button class="btn secondary full" id="glurReloadCloud">↻ โหลดข้อมูลใหม่</button></div><div class="hint">การกู้คืนฐานข้อมูลและการล้างข้อมูลทั้งร้านต้องดำเนินการด้วยระบบ Owner ที่ตรวจสอบสิทธิ์ฝั่ง Supabase ในขั้นต่อไป ไม่มีปุ่มลบฐานข้อมูลจากเบราว์เซอร์</div>`);
+ document.getElementById('glurExportCloud').onclick=()=>downloadBlob(JSON.stringify({app:'GLUR BAR',exportedAt:new Date().toISOString(),shop_id:GLUR_SHOP_ID,partial_export:true,stock:cloudStock,recipes:cloudRecipes,sales:glurSales,sale_items:glurSaleItems,sale_ingredients:glurSaleIngredients,receipts:cloudReceipts,expenses:glurExpenses},null,2),'glur-cloud-partial-'+dateNow()+'.json','application/json');
+ document.getElementById('glurReloadCloud').onclick=async()=>{await Promise.all([loadCloudStock(),loadCloudRecipes(),loadGlurSales(),loadCloudReceipts(),glurLoadExpenses()]);renderSettings();toast('โหลดข้อมูล Cloud ใหม่แล้ว')};
+}
+const glurCloudSetPage=setPage;
+setPage=function(p){glurCloudSetPage(p);if(p==='costs'&&!glurExpensesReady)glurLoadExpenses();if(p==='settings')glurLoadExpenses()};
+const glurCloudShowAuthenticated=showAuthenticated;
+showAuthenticated=function(user){glurCloudShowAuthenticated(user);glurLoadExpenses()};
+const glurCloudLogout=glurLogout;
+glurLogout=async function(){glurExpenses=[];glurExpensesReady=false;await glurCloudLogout()};
 
 initAuth();
 </script>
