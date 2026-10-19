@@ -1045,7 +1045,7 @@ function glurRenderResetPanel(){
  <form id="glurResetForm" class="stack" autocomplete="off">
  <div class="field"><label>เลือกหมวดที่ต้องการล้าง</label><select name="scope">${scopes.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
  <div class="field"><label>เหตุผล (อย่างน้อย 10 ตัวอักษร)</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required placeholder="เช่น ล้างข้อมูลทดสอบก่อนเปิดร้านจริง"></textarea></div>
- <div class="field"><label>พิมพ์รหัสยืนยันตามที่แสดง</label><div id="glurResetPhrase" class="hint">RESET SALES</div><input name="confirmation" required autocomplete="off" placeholder="RESET SALES"></div>
+ <div class="field"><label for="glurResetConfirmation">พิมพ์คำยืนยันลงในช่องด้านล่าง</label><div id="glurResetPhrase" class="hint" style="font-size:18px;font-weight:800;letter-spacing:1px;color:#ffd49a">RESET SALES</div><input id="glurResetConfirmation" type="text" name="confirmation" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="แตะตรงนี้แล้วพิมพ์ RESET ..." style="display:block!important;visibility:visible!important;opacity:1!important;width:100%;min-height:52px;background:#fff!important;color:#171514!important;border:3px solid #e88c32!important;font-size:18px!important;box-sizing:border-box;"></div>
  <div class="field"><label>ยืนยันรหัสผ่าน Owner อีกครั้ง</label><input name="password" type="password" required autocomplete="current-password"></div>
  <label class="row small"><input type="checkbox" name="backup" required style="width:auto">ฉันสำรองฐานข้อมูล Supabase แยกต่างหากและเข้าใจว่าการลบย้อนกลับไม่ได้</label>
  <button class="btn danger full" type="submit">ล้างข้อมูลหมวดที่เลือก</button>
@@ -1059,7 +1059,7 @@ renderSettings=function(){
  if(glurAdjustRole!=='owner')return;
  const app=document.getElementById('app');app.insertAdjacentHTML('beforeend',glurRenderResetPanel());
  const form=document.getElementById('glurResetForm');
- const phrase=()=>{document.getElementById('glurResetPhrase').textContent='RESET '+form.elements.scope.value.toUpperCase()};
+ const phrase=()=>{const code='RESET '+form.elements.scope.value.toUpperCase();document.getElementById('glurResetPhrase').textContent=code;form.elements.confirmation.placeholder='พิมพ์ '+code+' ที่นี่';form.elements.confirmation.value=''};
  form.elements.scope.onchange=phrase;phrase();
  document.getElementById('glurResetAuditRefresh').onclick=glurLoadResetAudit;
  form.onsubmit=async e=>{
