@@ -1025,6 +1025,72 @@ setPage=function(p){pbPrevSetPage(p);if(p==='prebatch')pbLoad()};
 const pbPrevAuth=showAuthenticated;
 showAuthenticated=function(user){pbPrevAuth(user);pbMode='list';pbLoad()};
 
+
+// Owner-only data management: server RPC checks membership and performs an atomic transaction.
+let glurResetAudit=[];
+async function glurLoadResetAudit(){
+ if(glurAdjustRole!=='owner')return;
+ const {data,error}=await glurSupabase.from('glur_data_reset_audit')
+  .select('id,scope,reason,deleted_counts,requested_by,created_at')
+  .eq('shop_id',GLUR_SHOP_ID).order('created_at',{ascending:false}).limit(30);
+ if(error){toast('โหลดประวัติล้างข้อมูลไม่ได้: '+error.message);return}
+ glurResetAudit=data||[];
+ if(page==='settings')renderSettings();
+}
+function glurRenderResetPanel(){
+ if(glurAdjustRole!=='owner')return '';
+ const scopes=[['sales','ยอดขายและประวัติปรับยอดขาย'],['expenses','ค่าใช้จ่ายและประวัติยกเลิก'],['prebatch','สูตร Pre-batch และประวัติผลิต'],['recipes','สูตรเครื่องดื่ม'],['stock','สต๊อกและประวัติสต๊อก'],['all','ข้อมูลธุรกิจทั้งหมด (คงบัญชีและสิทธิ์ไว้)']];
+ return `<div class="section-title">จัดการข้อมูล · เฉพาะ Owner</div><div class="card" style="border-color:#a74b42">
+ <div class="hint warn">การลบเป็นการลบจริงและไม่คืนยอดสต๊อกอัตโนมัติ · บางหมวดอาจถูกปฏิเสธหากยังมีข้อมูลที่เชื่อมโยงกัน · ต้องสำรองข้อมูลและตรวจสอบก่อน</div>
+ <form id="glurResetForm" class="stack" autocomplete="off">
+ <div class="field"><label>เลือกหมวดที่ต้องการล้าง</label><select name="scope">${scopes.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
+ <div class="field"><label>เหตุผล (อย่างน้อย 10 ตัวอักษร)</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required placeholder="เช่น ล้างข้อมูลทดสอบก่อนเปิดร้านจริง"></textarea></div>
+ <div class="field"><label>พิมพ์รหัสยืนยันตามที่แสดง</label><div id="glurResetPhrase" class="hint">RESET SALES</div><input name="confirmation" required autocomplete="off" placeholder="RESET SALES"></div>
+ <div class="field"><label>ยืนยันรหัสผ่าน Owner อีกครั้ง</label><input name="password" type="password" required autocomplete="current-password"></div>
+ <label class="row small"><input type="checkbox" name="backup" required style="width:auto">ฉันสำรองฐานข้อมูล Supabase แยกต่างหากและเข้าใจว่าการลบย้อนกลับไม่ได้</label>
+ <button class="btn danger full" type="submit">ล้างข้อมูลหมวดที่เลือก</button>
+ </form></div>
+ <div class="section-title">ประวัติการล้างข้อมูล</div><div class="card">${glurResetAudit.length?glurResetAudit.map(a=>`<div class="item"><div><strong>${esc(a.scope)}</strong><div class="small muted">${esc(glurSaleDate(a.created_at))} · ${esc(a.requested_by?.slice(0,8)||'')}</div><div class="small">${esc(a.reason)}</div><div class="small muted">จำนวนที่ลบ: ${esc(JSON.stringify(a.deleted_counts||{}))}</div></div></div>`).join(''):empty('ยังไม่มีประวัติ หรือยังไม่ได้โหลด')}</div>
+ <button class="btn secondary full" id="glurResetAuditRefresh" type="button">↻ โหลดประวัติการล้าง</button>`;
+}
+const glurResetPreviousSettings=renderSettings;
+renderSettings=function(){
+ glurResetPreviousSettings();
+ if(glurAdjustRole!=='owner')return;
+ const app=document.getElementById('app');app.insertAdjacentHTML('beforeend',glurRenderResetPanel());
+ const form=document.getElementById('glurResetForm');
+ const phrase=()=>{document.getElementById('glurResetPhrase').textContent='RESET '+form.elements.scope.value.toUpperCase()};
+ form.elements.scope.onchange=phrase;phrase();
+ document.getElementById('glurResetAuditRefresh').onclick=glurLoadResetAudit;
+ form.onsubmit=async e=>{
+  e.preventDefault();const scope=form.elements.scope.value,reason=form.elements.reason.value.trim();
+  const confirmation=form.elements.confirmation.value.trim(),password=form.elements.password.value;
+  if(reason.length<10||confirmation!=='RESET '+scope.toUpperCase()||!form.elements.backup.checked){toast('กรุณาตรวจสอบคำยืนยัน เหตุผล และการสำรองข้อมูล');return}
+  if(!confirm('คำเตือน: ลบข้อมูล '+scope+' แบบถาวร และไม่คืนสต๊อกอัตโนมัติ ต้องการดำเนินการต่อหรือไม่?'))return;
+  const btn=form.querySelector('[type=submit]');btn.disabled=true;
+  try{
+   const {data:{session},error:sessionError}=await glurSupabase.auth.getSession();
+   if(sessionError||!session)throw Error('กรุณาเข้าสู่ระบบใหม่');
+   const {data:usernameRows,error:usernameError}=await glurSupabase.from('glur_usernames').select('username').eq('user_id',currentUser.id).limit(1);
+   if(usernameError||!usernameRows?.[0]?.username)throw Error('ไม่สามารถตรวจสอบ Username ของ Owner ได้');
+   const response=await fetch(SUPABASE_URL+'/functions/v1/glur-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:SUPABASE_KEY},body:JSON.stringify({username:usernameRows[0].username,password})});
+   const login=await response.json().catch(()=>({}));
+   if(!response.ok||!login.access_token)throw Error('รหัสผ่าน Owner ไม่ถูกต้อง');
+   const {data:verified,error:verifyError}=await glurSupabase.auth.getUser(login.access_token);
+   if(verifyError||verified?.user?.id!==currentUser.id)throw Error('ยืนยันบัญชี Owner ไม่สำเร็จ');
+   // Do not replace current session: RPC runs as currently logged-in Owner.
+   const {data,error}=await glurSupabase.rpc('glur_owner_reset_data',{p_shop_id:GLUR_SHOP_ID,p_scope:scope,p_reason:reason,p_confirmation:confirmation});
+   if(error)throw error;
+   toast('ล้างข้อมูลสำเร็จ');console.info('GLUR reset result',data);
+   await Promise.all([loadCloudStock(),loadCloudRecipes(),loadGlurSales(),loadCloudReceipts(),glurLoadExpenses(),pbLoad(),glurLoadResetAudit()]);
+   if(page==='settings')renderSettings();
+  }catch(err){toast('ล้างข้อมูลไม่สำเร็จ: '+(err.message||err))}
+  finally{btn.disabled=false;form.elements.password.value=''}
+ };
+};
+const glurResetPreviousSetPage=setPage;
+setPage=function(p){glurResetPreviousSetPage(p);if(p==='settings'&&glurAdjustRole==='owner')glurLoadResetAudit()};
+
 initAuth();
 </script>
 </body>
