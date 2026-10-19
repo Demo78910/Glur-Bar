@@ -132,7 +132,7 @@ input::placeholder,textarea::placeholder{color:#89776d}
 <div id="glurAccount" class="glur-account hidden" aria-label="ข้อมูลบัญชีผู้ใช้"><span id="glurAccountText">กำลังตรวจสอบสิทธิ์…</span><button type="button" id="glurLogout" class="btn secondary smallbtn">ออกจากระบบ</button></div>
 <main class="wrap" id="app"></main>
 <nav class="nav" id="nav">
-<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="prebatch"><span>⚗</span>Pre-batch</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
+<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="prebatch"><span>⚗</span>Pre-batch</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="closing"><span>✓</span>ปิดยอด</button><button data-page="profit"><span>↗</span>กำไร</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
 </nav>
 <div id="toast" class="toast hidden" role="status"></div>
 <script>
@@ -1128,6 +1128,73 @@ renderSettings=function(){
 };
 const glurResetPreviousSetPage=setPage;
 setPage=function(p){glurResetPreviousSetPage(p);if(p==='settings'&&glurAdjustRole==='owner')glurLoadResetAudit()};
+
+
+// GLUR BAR Daily Closing + Profit Analytics (Supabase read-only reports + immutable close snapshots)
+let glurProfitMonth='',glurProfitData=null,glurProfitBusy=false,glurProfitError='';
+let glurClosingRows=[],glurClosingError='',glurClosingBusy=false;
+function glurThaiBusinessToday(){
+ const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+ const get=k=>parts.find(x=>x.type===k)?.value;
+ const d=new Date(Date.UTC(+get('year'),+get('month')-1,+get('day')));
+ if(+get('hour')<5)d.setUTCDate(d.getUTCDate()-1);
+ return d.toISOString().slice(0,10);
+}
+function glurPreviousBusinessDay(){const d=new Date(glurThaiBusinessToday()+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10)}
+function glurMoneySafe(v){return money(Number(v)||0)}
+function glurProfitMonthDates(m){if(!/^\d{4}-\d{2}$/.test(m))throw Error('เดือนที่เลือกไม่ถูกต้อง');const [y,mon]=m.split('-').map(Number);if(mon<1||mon>12)throw Error('เดือนที่เลือกไม่ถูกต้อง');return [m+'-01',new Date(Date.UTC(y,mon,0)).toISOString().slice(0,10)]}
+async function glurFetchProfit(m){
+ if(glurProfitBusy)return;glurProfitBusy=true;glurProfitError='';
+ try{const [p_from,p_to]=glurProfitMonthDates(m);const {data,error}=await glurSupabase.rpc('glur_profit_report',{p_shop_id:GLUR_SHOP_ID,p_from,p_to});if(error)throw error;glurProfitData=data;glurProfitMonth=m}
+ catch(e){glurProfitError=e.message||String(e);glurProfitData=null}
+ finally{glurProfitBusy=false;if(page==='profit')renderGlurProfit()}
+}
+function renderGlurProfit(){
+ const m=glurProfitMonth||glurThaiBusinessToday().slice(0,7),d=glurProfitData,s=d?.summary||{};
+ const menus=(d?.menus||[]).slice(),days=d?.days||[];
+ const top=menus.slice().sort((a,b)=>Number(b.qty)-Number(a.qty)).slice(0,10);
+ const high=menus.filter(x=>Number(x.qty)>0).sort((a,b)=>Number(b.cogs)/Number(b.qty)-Number(a.cogs)/Number(a.qty)).slice(0,10);
+ const metricLine=(label,value)=>`<div class="tableline"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+ shell('วิเคราะห์กำไร · Profit Analytics',`<div class="card"><div class="field"><label>เลือกเดือน (ตามวันทำการ 05:00–04:59 เวลาไทย)</label><input id="profitMonth" type="month" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:9px" id="profitReload">↻ โหลดรายงานจาก Supabase</button>${glurProfitError?`<div class="hint warn">${esc(glurProfitError)}</div>`:''}${glurProfitBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':''}</div>
+ ${d?`<div class="grid">${metric('ยอดขาย',glurMoneySafe(s.revenue))}${metric('ต้นทุนขาย',glurMoneySafe(s.cogs))}${metric('กำไรขั้นต้น',glurMoneySafe(Number(s.revenue)-Number(s.cogs)))}${metric('จำนวนแก้ว',String(s.qty||0))}</div>
+ <div class="card">${metricLine('ค่าใช้จ่ายที่บันทึก',glurMoneySafe(s.expenses))}${metricLine('กำไรหลังหักค่าใช้จ่ายที่บันทึก',glurMoneySafe(Number(s.revenue)-Number(s.cogs)-Number(s.expenses)))}${metricLine('อัตรากำไรขั้นต้น',Number(s.revenue)>0?(((Number(s.revenue)-Number(s.cogs))/Number(s.revenue))*100).toFixed(1)+'%':'—')}</div>
+ <div class="section-title">เมนูขายดี (ตามจำนวนแก้ว)</div><div class="card">${top.length?top.map(x=>metricLine(x.name,`${x.qty} แก้ว · ${glurMoneySafe(x.revenue)}`)).join(''):empty('ไม่มีรายการขาย')}</div>
+ <div class="section-title">เมนูต้นทุนต่อแก้วสูงสุด (เฉลี่ยจากยอดขายจริง)</div><div class="card">${high.length?high.map(x=>metricLine(x.name,`${glurMoneySafe(Number(x.cogs)/Number(x.qty))}/แก้ว · กำไรขั้นต้น ${glurMoneySafe(Number(x.revenue)-Number(x.cogs))}`)).join(''):empty('ไม่มีข้อมูลต้นทุน')}</div>
+ <div class="section-title">ยอดขายรายวัน</div><div class="card">${days.map(x=>metricLine(x.date,`${glurMoneySafe(x.revenue)} · ${x.qty} แก้ว · กำไร ${glurMoneySafe(Number(x.revenue)-Number(x.cogs))}`)).join('')}</div>`:'<div class="hint">กดโหลดรายงานเพื่อดูยอดขายรายวัน รายเดือน และกำไรต่อเมนู</div>'}
+ <div class="hint">ต้นทุนต่อแก้ว = ต้นทุนขายสะสม ÷ จำนวนแก้วที่ขาย · กำไรขั้นต้น = ยอดขาย − ต้นทุนขาย · ไม่รวมค่าแรง ค่าเช่า ภาษี หรือรายการที่ยังไม่ได้บันทึก</div>`);
+ document.getElementById('profitMonth').onchange=e=>{glurProfitMonth=e.target.value;glurProfitData=null;glurFetchProfit(glurProfitMonth)};
+ document.getElementById('profitReload').onclick=()=>glurFetchProfit(document.getElementById('profitMonth').value);
+}
+async function glurLoadClosings(){
+ if(glurClosingBusy)return;glurClosingBusy=true;glurClosingError='';
+ try{const {data,error}=await glurSupabase.from('glur_daily_closings').select('id,business_date,revenue,cogs,gross_profit,expenses,profit_after_expenses,drinks_sold,sale_transactions,note,closed_by,closed_at').eq('shop_id',GLUR_SHOP_ID).order('business_date',{ascending:false}).limit(90);if(error)throw error;glurClosingRows=data||[]}
+ catch(e){glurClosingError=e.message||String(e)}
+ finally{glurClosingBusy=false;if(page==='closing')renderGlurClosing()}
+}
+function renderGlurClosing(){
+ const date=window.glurClosingDate||glurPreviousBusinessDay();const allowed=glurCanAdjust();
+ shell('ปิดยอดประจำวัน · Daily Closing',`<div class="hint">วันทำการ: 05:00–04:59 (Asia/Bangkok) · ปิดได้เฉพาะวันที่สิ้นสุดแล้ว · การปิดยอดเป็น Snapshot ไม่ตัดสต๊อก ไม่ลบข้อมูล และไม่ล็อกยอดขายย้อนหลัง</div>
+ ${allowed?`<div class="card"><form id="glurCloseForm" class="stack"><div class="field"><label>วันที่ทำการ</label><input name="businessDate" type="date" max="${glurPreviousBusinessDay()}" value="${esc(date)}" required></div><div class="field"><label>บันทึกปิดกะ</label><textarea name="note" rows="2" maxlength="1000" placeholder="เช่น ตรวจยอดขายแล้ว / หมายเหตุส่วนต่าง"></textarea></div><button class="btn full" type="submit" ${glurClosingBusy?'disabled':''}>บันทึกปิดยอดวันนี้ (ครั้งเดียว)</button></form></div>`:'<div class="hint">เฉพาะ Owner / Manager ที่ปิดยอดได้</div>'}
+ <div class="row between"><strong>ประวัติการปิดยอด</strong><button id="glurClosingReload" class="btn secondary smallbtn">↻ รีเฟรช</button></div>
+ ${glurClosingError?`<div class="hint warn">${esc(glurClosingError)}</div>`:''}
+ <div class="card">${glurClosingRows.length?glurClosingRows.map(x=>`<div class="item" style="display:block"><strong>${esc(x.business_date)}</strong><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ${esc((x.closed_by||'').slice(0,8))}</div>${[['ยอดขาย',x.revenue],['ต้นทุนขาย',x.cogs],['กำไรขั้นต้น',x.gross_profit],['ค่าใช้จ่าย',x.expenses],['กำไรหลังหักค่าใช้จ่าย',x.profit_after_expenses]].map(([n,v])=>`<div class="tableline"><span>${n}</span><strong>${glurMoneySafe(v)}</strong></div>`).join('')}<div class="small muted">${esc(x.drinks_sold)} แก้ว · ${esc(x.sale_transactions)} รายการ</div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}</div>`).join(''):empty('ยังไม่มีประวัติการปิดยอด')}</div>
+ <div class="hint">หากมีการแก้ไขยอดขายหรือค่าใช้จ่ายย้อนหลังหลังปิดยอด Snapshot จะไม่เปลี่ยนโดยอัตโนมัติ ให้เปรียบเทียบกับรายงาน Profit Analytics เพื่อหาความต่าง</div>`);
+ document.getElementById('glurClosingReload').onclick=glurLoadClosings;
+ const form=document.getElementById('glurCloseForm');
+ if(form)form.onsubmit=async e=>{
+  e.preventDefault();const day=form.elements.businessDate.value;window.glurClosingDate=day;
+  if(day>=glurThaiBusinessToday()){toast('ปิดได้เฉพาะวันที่ทำการสิ้นสุดแล้ว');return}
+  if(!confirm('ยืนยันปิดยอดวันที่ '+day+'? จะบันทึก Snapshot และไม่สามารถปิดซ้ำได้'))return;
+  const btn=form.querySelector('[type=submit]');btn.disabled=true;
+  try{const {error}=await glurSupabase.rpc('glur_close_business_day',{p_shop_id:GLUR_SHOP_ID,p_business_date:day,p_note:form.elements.note.value});if(error)throw error;toast('ปิดยอดสำเร็จ');await glurLoadClosings()}
+  catch(err){toast('ปิดยอดไม่สำเร็จ: '+(err.message||err))}
+  finally{btn.disabled=false}
+ };
+}
+const glurClosingPriorRender=render;
+render=function(){if(!currentUser)return;if(page==='closing'){renderGlurClosing();return}if(page==='profit'){renderGlurProfit();return}glurClosingPriorRender()};
+const glurClosingPriorSetPage=setPage;
+setPage=function(p){glurClosingPriorSetPage(p);if(p==='closing')glurLoadClosings();if(p==='profit'&&(!glurProfitData||glurProfitMonth!==glurThaiBusinessToday().slice(0,7)))glurFetchProfit(glurProfitMonth||glurThaiBusinessToday().slice(0,7))};
 
 initAuth();
 </script>
