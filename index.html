@@ -1425,6 +1425,56 @@ render=function(){glurStage3OldRender();if(glurAdjustRole==='staff'){
  }};
 
 initAuth();
+
+// GLUR BAR Monthly Report V1 (Supabase RPC, no full-table downloads)
+let glurMonthlyData=null,glurMonthlyBusy=false,glurMonthlyError='',glurMonthlySelected='';
+function glurMonthlyCSVCell(v){return '"'+String(v??'').replace(/^[=+@\-\t\r]/,'\'$&').replace(/"/g,'""')+'"'}
+function glurMonthlyCSV(rows){return '\ufeff'+rows.map(r=>r.map(glurMonthlyCSVCell).join(',')).join('\r\n')}
+function glurMonthlySaveCSV(name,rows){downloadBlob(glurMonthlyCSV(rows),name,'text/csv;charset=utf-8;')}
+function glurMonthlyTables(d){
+ const s=d.summary||{},m=d.menus||[],i=d.ingredients||[],stock=d.stock||[],rec=d.receipts||[];
+ const line=(a,b)=>`<div class="tableline"><span>${esc(String(a))}</span><strong>${esc(String(b))}</strong></div>`;
+ const qty=(v)=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:3});
+ const cards=`<div class="grid">${metric('ยอดขาย',money(s.revenue))}${metric('ขายทั้งหมด',qty(s.drinks)+' แก้ว')}${metric('ต้นทุนขาย',money(s.cogs))}${metric('กำไรขั้นต้น',money(s.gross_profit))}</div><div class="card">${line('จำนวนรายการขาย',qty(s.transactions)+' รายการ')}${line('ค่าใช้จ่ายที่บันทึก',money(s.expenses))}${line('กำไรหลังหักค่าใช้จ่ายที่บันทึก',money(s.profit_after_recorded_expenses))}</div>`;
+ const menuHTML=m.length?m.map(x=>line(x.menu_name,qty(x.drinks)+' แก้ว · '+money(x.revenue))).join(''):empty('ไม่มีรายการขายในเดือนนี้');
+ const ingHTML=i.length?i.map(x=>line(x.stock_name,qty(x.used_quantity)+' '+x.unit)).join(''):empty('ไม่พบการใช้วัตถุดิบจากรายการขาย');
+ const stockHTML=stock.length?stock.map(x=>`<div class="item" style="display:block"><strong>${esc(x.stock_name)}</strong><div class="small muted">${esc(x.unit)} · ต้นเดือน: ไม่มีข้อมูลยืนยัน · ปลายเดือน: ไม่มีข้อมูลยืนยัน</div>${line('รับเข้า',qty(x.received_quantity)+' '+x.unit)}${line('ใช้ขาย',qty(x.sold_usage_quantity)+' '+x.unit)}${line('ของเสียที่บันทึก',qty(x.waste_quantity)+' '+x.unit)}${line('คงเหลือปัจจุบัน (ไม่ใช่ยอดปลายเดือน)',qty(x.current_quantity)+' '+x.unit)}</div>`).join(''):empty('ไม่มีวัตถุดิบ');
+ return `${cards}<div class="section-title">เมนูที่ขายออก (${m.length} เมนู)</div><div class="card">${menuHTML}</div><div class="section-title">วัตถุดิบที่ใช้จากการขาย</div><div class="card">${ingHTML}</div><div class="section-title">สต็อกและการเคลื่อนไหวประจำเดือน</div><div class="hint warn">${esc(d.stock_note||'ยอดสต็อกต้นเดือนและปลายเดือนยังไม่มีหลักฐานเพียงพอ')}</div><div class="card">${stockHTML}</div><div class="section-title">รับเข้าประจำเดือน</div><div class="card">${rec.length?rec.map(x=>line(x.stock_name,qty(x.quantity)+' '+x.unit+' · '+money(x.total_cost))).join(''):empty('ไม่มีรายการรับเข้า')}</div>`;
+}
+async function glurMonthlyLoad(m){
+ if(glurMonthlyBusy)return;glurMonthlySelected=m;glurMonthlyBusy=true;glurMonthlyError='';glurMonthlyData=null;
+ if(page==='reports')renderReports();
+ try{
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(m))throw Error('เลือกเดือนให้ถูกต้อง');
+  const {data,error}=await glurSupabase.rpc('glur_monthly_report',{p_shop_id:GLUR_SHOP_ID,p_month:m+'-01'});
+  if(error)throw error;glurMonthlyData=data;
+ }catch(e){glurMonthlyError=e.message||String(e)}finally{glurMonthlyBusy=false;if(page==='reports')renderReports()}
+}
+function glurMonthlyExportCSV(){
+ const d=glurMonthlyData;if(!d)return;const m=d.month;
+ const s=d.summary||{};
+ glurMonthlySaveCSV('GLUR_Monthly_Summary_'+m+'.csv',[
+  ['metric','value'],...Object.entries(s)]);
+ glurMonthlySaveCSV('GLUR_Monthly_Menus_'+m+'.csv',[
+  ['recipe_id','menu_name','drinks','transactions','revenue','cost'],...(d.menus||[]).map(x=>[x.recipe_id,x.menu_name,x.drinks,x.transactions,x.revenue,x.cost])]);
+ glurMonthlySaveCSV('GLUR_Monthly_Ingredients_'+m+'.csv',[
+  ['stock_id','stock_name','unit','used_quantity','ingredient_cost','sale_transactions'],...(d.ingredients||[]).map(x=>[x.stock_id,x.stock_name,x.unit,x.used_quantity,x.ingredient_cost,x.sale_transactions])]);
+ glurMonthlySaveCSV('GLUR_Monthly_Stock_'+m+'.csv',[
+  ['stock_id','stock_name','unit','opening_quantity_unavailable','received_quantity','sold_usage_quantity','waste_quantity','closing_quantity_unavailable','current_quantity'],...(d.stock||[]).map(x=>[x.stock_id,x.stock_name,x.unit,'',x.received_quantity,x.sold_usage_quantity,x.waste_quantity,'',x.current_quantity])]);
+ glurMonthlySaveCSV('GLUR_Monthly_Receipts_'+m+'.csv',[
+  ['stock_id','stock_name','unit','quantity','total_cost','transactions'],...(d.receipts||[]).map(x=>[x.stock_id,x.stock_name,x.unit,x.quantity,x.total_cost,x.transactions])]);
+}
+function renderReports(){
+ if(!glurCanAdjust()){shell('รายงานรายเดือน','<div class="hint warn">เฉพาะ Owner / Manager เท่านั้น</div>');return}
+ const m=glurMonthlySelected||glurThaiBusinessToday().slice(0,7);
+ shell('รายงานรายเดือน · Monthly Bar Report',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyCSV">ดาวน์โหลด CSV แยกหมวด (5 ไฟล์)</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
+ document.getElementById('reportMonth').onchange=e=>glurMonthlyLoad(e.target.value);
+ document.getElementById('monthlyRefresh').onclick=()=>glurMonthlyLoad(document.getElementById('reportMonth').value);
+ const b=document.getElementById('monthlyCSV');if(b)b.onclick=glurMonthlyExportCSV;
+}
+const glurMonthlyOldSetPage=setPage;
+setPage=function(p){glurMonthlyOldSetPage(p);if(p==='reports'&&glurCanAdjust()&&!glurMonthlyData&&!glurMonthlyBusy)glurMonthlyLoad(glurMonthlySelected||glurThaiBusinessToday().slice(0,7))};
+
 </script>
 </body>
 </html>
