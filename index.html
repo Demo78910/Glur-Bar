@@ -132,7 +132,7 @@ input::placeholder,textarea::placeholder{color:#89776d}
 <div id="glurAccount" class="glur-account hidden" aria-label="ข้อมูลบัญชีผู้ใช้"><span id="glurAccountText">กำลังตรวจสอบสิทธิ์…</span><button type="button" id="glurLogout" class="btn secondary smallbtn">ออกจากระบบ</button></div>
 <main class="wrap" id="app"></main>
 <nav class="nav" id="nav">
-<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="prebatch"><span>⚗</span>Pre-batch</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="closing"><span>✓</span>ปิดยอด</button><button data-page="profit"><span>↗</span>กำไร</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
+<button data-page="dashboard" class="active"><span>⌂</span>ภาพรวม</button><button data-page="stock"><span>▤</span>สต๊อก</button><button data-page="recipes"><span>✧</span>สูตร</button><button data-page="prebatch"><span>⚗</span>Pre-batch</button><button data-page="sales"><span>＋</span>ขาย</button><button data-page="receiving"><span>⇩</span>รับเข้า</button><button data-page="costs"><span>฿</span>ค่าใช้จ่าย</button><button data-page="reports"><span>▥</span>รายงาน</button><button data-page="closing"><span>✓</span>ปิดยอด</button><button data-page="profit"><span>↗</span>กำไร</button><button data-page="closing-report"><span>▦</span>สรุปปิดยอด</button><button data-page="team" class="hidden"><span>♙</span>พนักงาน</button><button data-page="audit" class="hidden"><span>◷</span>ประวัติปรับ</button><button data-page="settings"><span>⚙</span>สำรอง</button>
 </nav>
 <div id="toast" class="toast hidden" role="status"></div>
 <script>
@@ -1195,6 +1195,51 @@ const glurClosingPriorRender=render;
 render=function(){if(!currentUser)return;if(page==='closing'){renderGlurClosing();return}if(page==='profit'){renderGlurProfit();return}glurClosingPriorRender()};
 const glurClosingPriorSetPage=setPage;
 setPage=function(p){glurClosingPriorSetPage(p);if(p==='closing')glurLoadClosings();if(p==='profit'&&(!glurProfitData||glurProfitMonth!==glurThaiBusinessToday().slice(0,7)))glurFetchProfit(glurProfitMonth||glurThaiBusinessToday().slice(0,7))};
+
+
+// GLUR BAR Closing Report v1: read-only, compares saved closing snapshots with live figures.
+let glurCRFrom='',glurCRTo='',glurCRRows=[],glurCRLive=null,glurCRError='',glurCRBusy=false,glurCRLoaded=false;
+function glurCRShift(day,offset){const d=new Date(day+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+offset);return d.toISOString().slice(0,10)}
+function glurCRDefaults(){const end=glurPreviousBusinessDay();return [glurCRShift(end,-29),end]}
+function glurCRDateValid(v){return /^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+'T00:00:00Z'))}
+async function glurCRLoad(from,to){
+ if(glurCRBusy)return;
+ if(!glurCRDateValid(from)||!glurCRDateValid(to)||from>to||to>glurPreviousBusinessDay()||Math.round((Date.parse(to)-Date.parse(from))/86400000)>92){glurCRError='เลือกวันที่สิ้นสุดแล้ว โดยช่วงรายงานต้องไม่เกิน 93 วัน';renderGlurClosingReport();return}
+ glurCRBusy=true;glurCRError='';glurCRLoaded=false;glurCRFrom=from;glurCRTo=to;
+ try{
+  const [a,b]=await Promise.all([
+   glurSupabase.from('glur_daily_closings').select('id,business_date,revenue,cogs,gross_profit,expenses,profit_after_expenses,drinks_sold,sale_transactions,expense_transactions,note,closed_by,closed_at').eq('shop_id',GLUR_SHOP_ID).gte('business_date',from).lte('business_date',to).order('business_date',{ascending:false}).limit(100),
+   glurSupabase.rpc('glur_profit_report',{p_shop_id:GLUR_SHOP_ID,p_from:from,p_to:to})
+  ]);
+  if(a.error)throw a.error;if(b.error)throw b.error;
+  glurCRRows=a.data||[];glurCRLive=b.data;glurCRLoaded=true;
+ }catch(e){glurCRError=e.message||String(e);glurCRRows=[];glurCRLive=null}
+ finally{glurCRBusy=false;if(page==='closing-report')renderGlurClosingReport()}
+}
+function glurCRNum(v){return Number(v)||0}
+function glurCRCSVCell(v){let t=String(v??'');if(/^[\s]*[=+\-@\t\r]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"'}
+function glurCRExport(){
+ if(!glurCRLoaded||!glurCRRows.length){toast('ไม่มีประวัติปิดยอดสำหรับส่งออก');return}
+ const heads=['วันทำการ','ปิดเมื่อ (เวลาไทย)','ผู้ปิด (UUID)','ยอดขาย ณ ปิดยอด','ต้นทุน ณ ปิดยอด','กำไรขั้นต้น ณ ปิดยอด','ค่าใช้จ่าย ณ ปิดยอด','กำไรหลังค่าใช้จ่าย ณ ปิดยอด','จำนวนแก้ว ณ ปิดยอด','ยอดขายปัจจุบัน','ต้นทุนปัจจุบัน','ค่าใช้จ่ายปัจจุบัน','ส่วนต่างยอดขาย','ส่วนต่างต้นทุน','ส่วนต่างค่าใช้จ่าย','สถานะ','หมายเหตุ'];
+ const live=new Map((glurCRLive?.days||[]).map(x=>[x.date,x]));
+ const lines=[heads.map(glurCRCSVCell).join(',')];
+ for(const x of glurCRRows){const d=live.get(x.business_date)||{};const dr=glurCRNum(d.revenue)-glurCRNum(x.revenue),dc=glurCRNum(d.cogs)-glurCRNum(x.cogs),de=glurCRNum(d.expenses)-glurCRNum(x.expenses);const changed=[dr,dc,de,glurCRNum(d.qty)-glurCRNum(x.drinks_sold)].some(v=>Math.abs(v)>0.005);const row=[x.business_date,new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}),x.closed_by,x.revenue,x.cogs,x.gross_profit,x.expenses,x.profit_after_expenses,x.drinks_sold,d.revenue||0,d.cogs||0,d.expenses||0,dr,dc,de,changed?'ต่างจากวันปิดยอด':'ตรงกัน',x.note];lines.push(row.map(glurCRCSVCell).join(','))}
+ const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='GLUR_Closing_Report_'+glurCRFrom+'_'+glurCRTo+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function renderGlurClosingReport(){
+ const defaults=glurCRDefaults(),from=glurCRFrom||defaults[0],to=glurCRTo||defaults[1];
+ const live=new Map((glurCRLive?.days||[]).map(x=>[x.date,x]));
+ const totals=glurCRRows.reduce((a,x)=>{a.revenue+=glurCRNum(x.revenue);a.cogs+=glurCRNum(x.cogs);a.expenses+=glurCRNum(x.expenses);a.qty+=glurCRNum(x.drinks_sold);return a},{revenue:0,cogs:0,expenses:0,qty:0});
+ const rows=glurCRRows.map(x=>{const d=live.get(x.business_date)||{};const deltaRevenue=glurCRNum(d.revenue)-glurCRNum(x.revenue),deltaCost=glurCRNum(d.cogs)-glurCRNum(x.cogs),deltaExpense=glurCRNum(d.expenses)-glurCRNum(x.expenses),deltaQty=glurCRNum(d.qty)-glurCRNum(x.drinks_sold);const changed=[deltaRevenue,deltaCost,deltaExpense,deltaQty].some(n=>Math.abs(n)>0.005);
+ return `<div class="card"><div class="row between"><strong>${esc(x.business_date)}</strong><span class="pill" style="${changed?'border-color:#dc8a45;color:#ffd1aa':'border-color:#56805b;color:#b8edbd'}">${changed?'⚠ ข้อมูลเปลี่ยน':'✓ ตรงกับปัจจุบัน'}</span></div><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ID ${esc((x.closed_by||'').slice(0,8))}</div><div class="tableline"><span>ยอดขาย ณ ปิดยอด</span><strong>${glurMoneySafe(x.revenue)}</strong></div><div class="tableline"><span>ยอดขายปัจจุบัน</span><strong>${glurMoneySafe(d.revenue)}</strong></div><div class="tableline"><span>ส่วนต่างยอดขาย</span><strong>${glurMoneySafe(deltaRevenue)}</strong></div><div class="tableline"><span>ส่วนต่างต้นทุน / ค่าใช้จ่าย</span><strong>${glurMoneySafe(deltaCost)} / ${glurMoneySafe(deltaExpense)}</strong></div><div class="tableline"><span>จำนวนแก้ว ณ ปิด / ปัจจุบัน</span><strong>${esc(x.drinks_sold)} / ${esc(d.qty||0)}</strong></div><div class="tableline"><span>กำไรหลังค่าใช้จ่าย ณ ปิด</span><strong>${glurMoneySafe(x.profit_after_expenses)}</strong></div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}</div>`}).join('');
+ shell('รายงานปิดยอด · Closing Report',`<div class="hint">รายงานแบบอ่านอย่างเดียว เปรียบเทียบ Snapshot ที่บันทึกไว้กับยอดปัจจุบันจาก Supabase ตามวันทำการ 05:00–04:59 เวลาไทย · ค่าใช้จ่ายอ้างอิงวันที่ expense_date</div><div class="card"><form id="glurCRForm" class="stack"><div class="formgrid"><div class="field"><label>จากวันที่</label><input type="date" name="from" value="${esc(from)}" required></div><div class="field"><label>ถึงวันที่</label><input type="date" name="to" max="${glurPreviousBusinessDay()}" value="${esc(to)}" required></div></div><button class="btn full" type="submit" ${glurCRBusy?'disabled':''}>${glurCRBusy?'กำลังโหลด…':'↻ โหลดรายงาน'}</button></form>${glurCRError?`<div class="hint warn">${esc(glurCRError)}</div>`:''}</div>${glurCRLoaded?`<div class="grid">${metric('วันที่ปิดยอด',String(glurCRRows.length))}${metric('ยอดขาย ณ ปิดยอด',glurMoneySafe(totals.revenue))}${metric('กำไรขั้นต้น ณ ปิดยอด',glurMoneySafe(totals.revenue-totals.cogs))}${metric('จำนวนแก้ว ณ ปิดยอด',String(totals.qty))}</div><button class="btn secondary full" id="glurCRCSV" ${!glurCRRows.length?'disabled':''}>↓ ส่งออก CSV</button><div class="section-title">รายละเอียดวันที่ปิดยอด</div>${rows||empty('ไม่มีวันที่ปิดยอดในช่วงนี้')}`:'<div class="hint">เลือกช่วงวันที่ แล้วกดโหลดรายงาน</div>'}<div class="hint">สรุปด้านบนรวมเฉพาะวันที่มีการปิดยอดแล้ว · ส่วนต่าง = ยอดปัจจุบัน − ยอด ณ ปิดยอด · การเปลี่ยนแปลงไม่ได้หมายความว่ามีการทุจริตเสมอไป · ผู้ปิดแสดงเป็นรหัสบัญชีเพื่อไม่เดาชื่อจากข้อมูลที่ไม่ยืนยัน</div>`);
+ document.getElementById('glurCRForm').onsubmit=e=>{e.preventDefault();glurCRLoad(e.target.elements.from.value,e.target.elements.to.value)};
+ const b=document.getElementById('glurCRCSV');if(b)b.onclick=glurCRExport;
+}
+const glurCRPriorRender=render;
+render=function(){if(!currentUser)return;if(page==='closing-report'){renderGlurClosingReport();return}glurCRPriorRender()};
+const glurCRPriorSetPage=setPage;
+setPage=function(p){glurCRPriorSetPage(p);if(p==='closing-report'&&!glurCRLoaded&&!glurCRBusy){const d=glurCRDefaults();glurCRLoad(glurCRFrom||d[0],glurCRTo||d[1])}};
 
 initAuth();
 </script>
