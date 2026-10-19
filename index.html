@@ -1450,31 +1450,50 @@ async function glurMonthlyLoad(m){
   if(error)throw error;glurMonthlyData=data;
  }catch(e){glurMonthlyError=e.message||String(e)}finally{glurMonthlyBusy=false;if(page==='reports')renderReports()}
 }
+function glurMonthlyWorkbookSheets(d){
+ const s=d.summary||{}, m=d.menus||[], i=d.ingredients||[], st=d.stock||[], r=d.receipts||[];
+ const month=d.month||glurMonthlySelected||'';
+ return [
+  {name:'ภาพรวม',rows:[['GLUR BAR | รายงานประจำเดือน',month],[],['รายการ','จำนวน','หน่วย'],['ยอดขายรวม',s.revenue||0,'บาท'],['ต้นทุนสินค้าที่ขาย',s.cogs||0,'บาท'],['กำไรขั้นต้น',s.gross_profit||0,'บาท'],['ค่าใช้จ่ายที่บันทึก',s.expenses||0,'บาท'],['กำไรหลังหักค่าใช้จ่ายที่บันทึก',s.profit_after_recorded_expenses||0,'บาท'],['จำนวนแก้ว',s.drinks||0,'แก้ว'],['จำนวนรายการขาย',s.transactions||0,'รายการ'],['จำนวนรายการค่าใช้จ่าย',s.expense_transactions||0,'รายการ'],[],['หมายเหตุ','ยอดสต็อกต้นเดือน/ปลายเดือนย้อนหลังยังไม่สามารถยืนยันได้']]},
+  {name:'เมนูขายออก',rows:[['เมนู','จำนวนแก้ว','จำนวนรายการ','ยอดขาย (บาท)','ต้นทุน (บาท)'],...m.map(x=>[x.menu_name,x.drinks,x.transactions,x.revenue,x.cost])]},
+  {name:'วัตถุดิบที่ใช้',rows:[['วัตถุดิบ','หน่วย','ใช้ไป','ต้นทุน (บาท)','จำนวนรายการขาย'],...i.map(x=>[x.stock_name,x.unit,x.used_quantity,x.ingredient_cost,x.sale_transactions])]},
+  {name:'สต็อก',rows:[['วัตถุดิบ','หน่วย','ยอดต้นเดือน (ไม่มีข้อมูล)','รับเข้า','ใช้ขาย','ของเสีย','ยอดปลายเดือน (ไม่มีข้อมูล)','คงเหลือปัจจุบัน'],...st.map(x=>[x.stock_name,x.unit,'',x.received_quantity,x.sold_usage_quantity,x.waste_quantity,'',x.current_quantity])]},
+  {name:'รับสินค้า',rows:[['วัตถุดิบ','หน่วย','จำนวนรับเข้า','ต้นทุนรวม (บาท)','จำนวนครั้ง'],...r.map(x=>[x.stock_name,x.unit,x.quantity,x.total_cost,x.transactions])]}
+ ];
+}
 function glurMonthlyExportCSV(){
- const d=glurMonthlyData;if(!d)return;const m=d.month;
- const s=d.summary||{};
- glurMonthlySaveCSV('GLUR_Monthly_Summary_'+m+'.csv',[
-  ['metric','value'],...Object.entries(s)]);
- glurMonthlySaveCSV('GLUR_Monthly_Menus_'+m+'.csv',[
-  ['recipe_id','menu_name','drinks','transactions','revenue','cost'],...(d.menus||[]).map(x=>[x.recipe_id,x.menu_name,x.drinks,x.transactions,x.revenue,x.cost])]);
- glurMonthlySaveCSV('GLUR_Monthly_Ingredients_'+m+'.csv',[
-  ['stock_id','stock_name','unit','used_quantity','ingredient_cost','sale_transactions'],...(d.ingredients||[]).map(x=>[x.stock_id,x.stock_name,x.unit,x.used_quantity,x.ingredient_cost,x.sale_transactions])]);
- glurMonthlySaveCSV('GLUR_Monthly_Stock_'+m+'.csv',[
-  ['stock_id','stock_name','unit','opening_quantity_unavailable','received_quantity','sold_usage_quantity','waste_quantity','closing_quantity_unavailable','current_quantity'],...(d.stock||[]).map(x=>[x.stock_id,x.stock_name,x.unit,'',x.received_quantity,x.sold_usage_quantity,x.waste_quantity,'',x.current_quantity])]);
- glurMonthlySaveCSV('GLUR_Monthly_Receipts_'+m+'.csv',[
-  ['stock_id','stock_name','unit','quantity','total_cost','transactions'],...(d.receipts||[]).map(x=>[x.stock_id,x.stock_name,x.unit,x.quantity,x.total_cost,x.transactions])]);
+ const d=glurMonthlyData;if(!d)return;
+ const sheets=glurMonthlyWorkbookSheets(d);
+ // Single readable CSV: sections are separated by blank lines.
+ const rows=[];sheets.forEach((sheet,index)=>{if(index)rows.push([],[]);rows.push(['=== '+sheet.name+' ===']);rows.push(...sheet.rows)});
+ glurMonthlySaveCSV('GLUR_Monthly_Combined_'+(d.month||glurMonthlySelected)+'.csv',rows);
+}
+function glurMonthlyExportExcel(){
+ const d=glurMonthlyData;if(!d)return;
+ if(typeof XLSX==='undefined'){
+  toast('ยังโหลดตัวสร้าง Excel ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต หรือใช้ CSV รวม');return;
+ }
+ const wb=XLSX.utils.book_new();
+ glurMonthlyWorkbookSheets(d).forEach(section=>{
+  const ws=XLSX.utils.aoa_to_sheet(section.rows);
+  ws['!cols']=section.rows[0]?.map((_,col)=>({wch:col===0?38:col===1?24:20}))||[];
+  if(section.name==='ภาพรวม')ws['!cols']=[{wch:40},{wch:24},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,section.name);
+ });
+ XLSX.writeFile(wb,'GLUR_Monthly_Report_'+(d.month||glurMonthlySelected)+'.xlsx');
 }
 function renderReports(){
  if(!glurCanAdjust()){shell('รายงานรายเดือน','<div class="hint warn">เฉพาะ Owner / Manager เท่านั้น</div>');return}
  const m=glurMonthlySelected||glurThaiBusinessToday().slice(0,7);
- shell('รายงานรายเดือน · Monthly Bar Report',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyCSV">ดาวน์โหลด CSV แยกหมวด (5 ไฟล์)</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
+ shell('รายงานรายเดือน · Monthly Bar Report',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyExcel">ดาวน์โหลด Excel ไฟล์เดียว (.xlsx) · 5 ชีต</button><button class="btn secondary full" style="margin-top:10px" id="monthlyCSV">ดาวน์โหลด CSV รวมไฟล์เดียว</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
  document.getElementById('reportMonth').onchange=e=>glurMonthlyLoad(e.target.value);
  document.getElementById('monthlyRefresh').onclick=()=>glurMonthlyLoad(document.getElementById('reportMonth').value);
- const b=document.getElementById('monthlyCSV');if(b)b.onclick=glurMonthlyExportCSV;
+ const b=document.getElementById('monthlyCSV');if(b)b.onclick=glurMonthlyExportCSV;const e=document.getElementById('monthlyExcel');if(e)e.onclick=glurMonthlyExportExcel;
 }
 const glurMonthlyOldSetPage=setPage;
 setPage=function(p){glurMonthlyOldSetPage(p);if(p==='reports'&&glurCanAdjust()&&!glurMonthlyData&&!glurMonthlyBusy)glurMonthlyLoad(glurMonthlySelected||glurThaiBusinessToday().slice(0,7))};
 
 </script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </body>
 </html>
