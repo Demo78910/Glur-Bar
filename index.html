@@ -1475,14 +1475,30 @@ function glurMonthlyCSVCell(v){return '"'+String(v??'').replace(/^[=+@\-\t\r]/,'
 function glurMonthlyCSV(rows){return '\ufeff'+rows.map(r=>r.map(glurMonthlyCSVCell).join(',')).join('\r\n')}
 function glurMonthlySaveCSV(name,rows){downloadBlob(glurMonthlyCSV(rows),name,'text/csv;charset=utf-8;')}
 function glurMonthlyTables(d){
- const s=d.summary||{},m=d.menus||[],i=d.ingredients||[],stock=d.stock||[],rec=d.receipts||[];
- const line=(a,b)=>`<div class="tableline"><span>${esc(String(a))}</span><strong>${esc(String(b))}</strong></div>`;
- const qty=(v)=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:3});
- const cards=`<div class="grid">${metric('ยอดขาย',money(s.revenue))}${metric('ขายทั้งหมด',qty(s.drinks)+' แก้ว')}${metric('ต้นทุนขาย',money(s.cogs))}${metric('กำไรขั้นต้น',money(s.gross_profit))}</div><div class="card">${line('จำนวนรายการขาย',qty(s.transactions)+' รายการ')}${line('ค่าใช้จ่ายที่บันทึก',money(s.expenses))}${line('กำไรหลังหักค่าใช้จ่ายที่บันทึก',money(s.profit_after_recorded_expenses))}</div>`;
- const menuHTML=m.length?m.map(x=>line(x.menu_name,qty(x.drinks)+' แก้ว · '+money(x.revenue))).join(''):empty('ไม่มีรายการขายในเดือนนี้');
- const ingHTML=i.length?i.map(x=>line(x.stock_name,qty(x.used_quantity)+' '+x.unit)).join(''):empty('ไม่พบการใช้วัตถุดิบจากรายการขาย');
- const stockHTML=stock.length?stock.map(x=>`<div class="item" style="display:block"><strong>${esc(x.stock_name)}</strong><div class="small muted">${esc(x.unit)} · ต้นเดือน: ไม่มีข้อมูลยืนยัน · ปลายเดือน: ไม่มีข้อมูลยืนยัน</div>${line('รับเข้า',qty(x.received_quantity)+' '+x.unit)}${line('ใช้ขาย',qty(x.sold_usage_quantity)+' '+x.unit)}${line('ของเสียที่บันทึก',qty(x.waste_quantity)+' '+x.unit)}${line('คงเหลือปัจจุบัน (ไม่ใช่ยอดปลายเดือน)',qty(x.current_quantity)+' '+x.unit)}</div>`).join(''):empty('ไม่มีวัตถุดิบ');
- return `${cards}<div class="section-title">เมนูที่ขายออก (${m.length} เมนู)</div><div class="card">${menuHTML}</div><div class="section-title">วัตถุดิบที่ใช้จากการขาย</div><div class="card">${ingHTML}</div><div class="section-title">สต็อกและการเคลื่อนไหวประจำเดือน</div><div class="hint warn">${esc(d.stock_note||'ยอดสต็อกต้นเดือนและปลายเดือนยังไม่มีหลักฐานเพียงพอ')}</div><div class="card">${stockHTML}</div><div class="section-title">รับเข้าประจำเดือน</div><div class="card">${rec.length?rec.map(x=>line(x.stock_name,qty(x.quantity)+' '+x.unit+' · '+money(x.total_cost))).join(''):empty('ไม่มีรายการรับเข้า')}</div>`;
+ const s=d.summary||{},menus=d.menus||[],ings=d.ingredients||[],stocks=d.stock||[],receipts=d.receipts||[];
+ const n=v=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:3});
+ const amount=v=>money(Number(v||0));
+ const line=(a,b,detail='')=>`<div class="tableline" style="align-items:start;gap:12px"><span style="min-width:0;overflow-wrap:anywhere">${esc(String(a))}${detail?`<div class="small muted">${esc(String(detail))}</div>`:''}</span><strong style="text-align:right;white-space:nowrap">${esc(String(b))}</strong></div>`;
+ const section=(title,subtitle,body,count,opened=false)=>`<details ${opened?'open':''} style="margin-top:12px" class="card"><summary style="cursor:pointer;font-weight:700;list-style-position:inside">${esc(title)} <span class="small muted">(${count})</span></summary><div class="small muted" style="margin:8px 0 12px">${esc(subtitle)}</div>${body}</details>`;
+ const revenue=Number(s.revenue||0),cogs=Number(s.cogs||0),exp=Number(s.expenses||0);
+ const menuBody=menus.length?menus.map((x,j)=>line(`${j+1}. ${x.menu_name||'ไม่ระบุชื่อเมนู'}`,n(x.drinks)+' แก้ว',`ยอดขาย ${amount(x.revenue)}`)).join(''):empty('ยังไม่มีเมนูที่ขายในเดือนนี้');
+ const ingBody=ings.length?ings.map(x=>line(x.stock_name||'ไม่ระบุวัตถุดิบ',n(x.used_quantity)+' '+(x.unit||''))).join(''):empty('ไม่มีข้อมูลการใช้วัตถุดิบจากการขาย');
+ const stockBody=stocks.length?stocks.map(x=>`<div style="padding:10px 0;border-bottom:1px solid var(--line,rgba(128,128,128,.2))"><strong>${esc(x.stock_name||'ไม่ระบุชื่อ')}</strong><div class="small muted">หน่วย: ${esc(x.unit||'-')}</div>${line('รับเข้า',n(x.received_quantity))}${line('ใช้ขาย',n(x.sold_usage_quantity))}${line('ของเสีย',n(x.waste_quantity))}${line('คงเหลือตอนนี้',n(x.current_quantity))}</div>`).join(''):empty('ไม่มีรายการสต็อก');
+ const receiptBody=receipts.length?receipts.map(x=>line(x.stock_name||'ไม่ระบุชื่อ',n(x.quantity)+' '+(x.unit||''),`มูลค่ารับเข้า ${amount(x.total_cost)}`)).join(''):empty('ไม่มีรายการรับเข้าในเดือนนี้');
+ return `<div class="small muted" style="margin-bottom:12px">สรุปตัวเลขสำคัญก่อน · แตะหัวข้อด้านล่างเพื่อดูรายละเอียด</div>
+ <div class="grid">${metric('ยอดขายทั้งหมด',amount(revenue))}${metric('กำไรขั้นต้น',amount(revenue-cogs))}${metric('จำนวนแก้วที่ขาย',n(s.drinks)+' แก้ว')}${metric('กำไรหลังหักค่าใช้จ่ายที่บันทึก',amount(revenue-cogs-exp))}</div>
+ <div class="card" style="margin-top:12px"><strong>เงินเข้า–เงินออกของเดือนนี้</strong>
+ ${line('ยอดขาย',amount(revenue))}
+ ${line('หักต้นทุนเครื่องดื่ม', '− '+amount(cogs))}
+ ${line('หักค่าใช้จ่ายที่บันทึก','− '+amount(exp))}
+ <div style="border-top:1px solid var(--line,rgba(128,128,128,.2));margin-top:8px;padding-top:8px">${line('คงเหลือหลังหักค่าใช้จ่ายที่บันทึก',amount(revenue-cogs-exp))}</div>
+ <div class="small muted" style="margin-top:10px">จำนวนบิล/รายการขาย ${n(s.transactions)} รายการ · ตัวเลขนี้ยังไม่ใช่กำไรสุทธิทางบัญชี หากมีค่าใช้จ่ายที่ไม่ได้บันทึก</div></div>
+ <div class="section-title">รายละเอียด (เปิดดูเฉพาะเรื่องที่ต้องการ)</div>
+ ${section('1. เมนูที่ขาย','จำนวนแก้วและยอดขายของแต่ละเมนู',menuBody,menus.length,true)}
+ ${section('2. วัตถุดิบที่ใช้','ปริมาณที่ตัดจากสูตรเมื่อขาย ไม่รวมการใช้ Pre-batch',ingBody,ings.length)}
+ ${section('3. การเคลื่อนไหวสต็อก','รับเข้า ใช้ขาย ของเสีย และยอดคงเหลือปัจจุบัน',stockBody,stocks.length)}
+ ${section('4. รายการรับสินค้า','จำนวนและมูลค่าที่รับเข้าในเดือนนี้',receiptBody,receipts.length)}
+ <div class="hint warn" style="margin-top:12px">${esc(d.stock_note||'ยอดคงเหลือปัจจุบันไม่ใช่ยอดสต็อก ณ วันสิ้นเดือน และยังไม่สามารถยืนยันยอดต้นเดือน/ปลายเดือนย้อนหลังได้')}</div>`;
 }
 async function glurMonthlyLoad(m){
  if(glurMonthlyBusy)return;glurMonthlySelected=m;glurMonthlyBusy=true;glurMonthlyError='';glurMonthlyData=null;
@@ -1496,31 +1512,78 @@ async function glurMonthlyLoad(m){
 function glurMonthlyWorkbookSheets(d){
  const s=d.summary||{}, m=d.menus||[], i=d.ingredients||[], st=d.stock||[], r=d.receipts||[];
  const month=d.month||glurMonthlySelected||'';
+ const num=v=>Number(v||0);
+ const total=(arr,key)=>arr.reduce((a,x)=>a+num(x[key]),0);
  return [
-  {name:'ภาพรวม',rows:[['GLUR BAR | รายงานประจำเดือน',month],[],['รายการ','จำนวน','หน่วย'],['ยอดขายรวม',s.revenue||0,'บาท'],['ต้นทุนสินค้าที่ขาย',s.cogs||0,'บาท'],['กำไรขั้นต้น',s.gross_profit||0,'บาท'],['ค่าใช้จ่ายที่บันทึก',s.expenses||0,'บาท'],['กำไรหลังหักค่าใช้จ่ายที่บันทึก',s.profit_after_recorded_expenses||0,'บาท'],['จำนวนแก้ว',s.drinks||0,'แก้ว'],['จำนวนรายการขาย',s.transactions||0,'รายการ'],['จำนวนรายการค่าใช้จ่าย',s.expense_transactions||0,'รายการ'],[],['หมายเหตุ','ยอดสต็อกต้นเดือน/ปลายเดือนย้อนหลังยังไม่สามารถยืนยันได้']]},
-  {name:'เมนูขายออก',rows:[['เมนู','จำนวนแก้ว','จำนวนรายการ','ยอดขาย (บาท)','ต้นทุน (บาท)'],...m.map(x=>[x.menu_name,x.drinks,x.transactions,x.revenue,x.cost])]},
-  {name:'วัตถุดิบที่ใช้',rows:[['วัตถุดิบ','หน่วย','ใช้ไป','ต้นทุน (บาท)','จำนวนรายการขาย'],...i.map(x=>[x.stock_name,x.unit,x.used_quantity,x.ingredient_cost,x.sale_transactions])]},
-  {name:'สต็อก',rows:[['วัตถุดิบ','หน่วย','ยอดต้นเดือน (ไม่มีข้อมูล)','รับเข้า','ใช้ขาย','ของเสีย','ยอดปลายเดือน (ไม่มีข้อมูล)','คงเหลือปัจจุบัน'],...st.map(x=>[x.stock_name,x.unit,'',x.received_quantity,x.sold_usage_quantity,x.waste_quantity,'',x.current_quantity])]},
-  {name:'รับสินค้า',rows:[['วัตถุดิบ','หน่วย','จำนวนรับเข้า','ต้นทุนรวม (บาท)','จำนวนครั้ง'],...r.map(x=>[x.stock_name,x.unit,x.quantity,x.total_cost,x.transactions])]}
+  {name:'01 ภาพรวม',headerRow:5,rows:[
+   ['GLUR BAR | รายงานประจำเดือน'],['เดือนที่รายงาน',month],['รายงานนี้แสดงเฉพาะข้อมูลที่บันทึกในระบบ'],[],
+   ['ตัวชี้วัด','จำนวน','หน่วย','คำอธิบาย'],
+   ['ยอดขายทั้งหมด',num(s.revenue),'บาท','รายรับจากการขายเครื่องดื่ม'],
+   ['ต้นทุนเครื่องดื่ม',num(s.cogs),'บาท','ต้นทุนตามข้อมูลสูตร/การขาย'],
+   ['กำไรขั้นต้น',num(s.revenue)-num(s.cogs),'บาท','ยอดขาย หักต้นทุนเครื่องดื่ม'],
+   ['ค่าใช้จ่ายที่บันทึก',num(s.expenses),'บาท','เฉพาะค่าใช้จ่ายที่มีการบันทึก'],
+   ['กำไรหลังหักค่าใช้จ่ายที่บันทึก',num(s.revenue)-num(s.cogs)-num(s.expenses),'บาท','ยังไม่ใช่กำไรสุทธิทางบัญชี'],
+   ['จำนวนเครื่องดื่มที่ขาย',num(s.drinks),'แก้ว','รวมจำนวนแก้วทุกเมนู'],
+   ['จำนวนรายการขาย',num(s.transactions),'รายการ','ตามการนับของระบบ'],
+   ['จำนวนรายการค่าใช้จ่าย',num(s.expense_transactions),'รายการ','ตามการนับของระบบ'],[],
+   ['คำอธิบายเพิ่มเติม'],
+   ['1. ยอดคงเหลือในชีตสต็อกคือยอดปัจจุบัน ไม่ใช่ยอดสิ้นเดือนย้อนหลัง'],
+   ['2. การใช้วัตถุดิบจากการขายไม่รวม Pre-batch'],
+   ['3. ต้นทุนและกำไรขึ้นอยู่กับข้อมูลที่บันทึกจริงในระบบ']
+  ]},
+  {name:'02 เมนูขายออก',headerRow:3,rows:[
+   ['GLUR BAR | รายละเอียดเมนูขายออก'],['เดือน',month],
+   ['ชื่อเมนู','จำนวนแก้ว','จำนวนรายการขาย','ยอดขาย (บาท)','ต้นทุน (บาท)','กำไรขั้นต้น (บาท)'],
+   ...m.map(x=>[x.menu_name,num(x.drinks),num(x.transactions),num(x.revenue),num(x.cost),num(x.revenue)-num(x.cost)]),
+   ['รวม',total(m,'drinks'),total(m,'transactions'),total(m,'revenue'),total(m,'cost'),total(m,'revenue')-total(m,'cost')]
+  ]},
+  {name:'03 วัตถุดิบที่ใช้',headerRow:4,rows:[
+   ['GLUR BAR | วัตถุดิบที่ใช้จากการขาย'],['เดือน',month],['หมายเหตุ','ไม่รวมการใช้ Pre-batch และไม่รวมของเสีย'],
+   ['วัตถุดิบ','หน่วย','ปริมาณใช้','ต้นทุนที่บันทึก (บาท)','จำนวนรายการขาย'],
+   ...i.map(x=>[x.stock_name,x.unit,num(x.used_quantity),num(x.ingredient_cost),num(x.sale_transactions)])
+  ]},
+  {name:'04 สต็อก',headerRow:4,rows:[
+   ['GLUR BAR | การเคลื่อนไหวสต็อก'],['เดือน',month],['สำคัญ','คงเหลือเป็นยอดปัจจุบัน ไม่ใช่ยอดสิ้นเดือนย้อนหลัง'],
+   ['วัตถุดิบ','หน่วย','รับเข้าในเดือน','ใช้จากการขาย','ของเสีย','คงเหลือปัจจุบัน'],
+   ...st.map(x=>[x.stock_name,x.unit,num(x.received_quantity),num(x.sold_usage_quantity),num(x.waste_quantity),num(x.current_quantity)])
+  ]},
+  {name:'05 รับสินค้า',headerRow:3,rows:[
+   ['GLUR BAR | รายการรับสินค้า'],['เดือน',month],
+   ['วัตถุดิบ','หน่วย','ปริมาณรับเข้า','มูลค่ารับเข้า (บาท)','จำนวนครั้งที่รับ'],
+   ...r.map(x=>[x.stock_name,x.unit,num(x.quantity),num(x.total_cost),num(x.transactions)])
+  ]}
  ];
 }
 function glurMonthlyExportCSV(){
  const d=glurMonthlyData;if(!d)return;
+ const month=d.month||glurMonthlySelected||'';
  const sheets=glurMonthlyWorkbookSheets(d);
- // Single readable CSV: sections are separated by blank lines.
- const rows=[];sheets.forEach((sheet,index)=>{if(index)rows.push([],[]);rows.push(['=== '+sheet.name+' ===']);rows.push(...sheet.rows)});
- glurMonthlySaveCSV('GLUR_Monthly_Combined_'+(d.month||glurMonthlySelected)+'.csv',rows);
+ // CSV is a single rectangular table. Section names are values, not incompatible headers.
+ const rows=[['เดือน','หมวดรายงาน','รายการ','ตัวชี้วัด','ค่า','หน่วย']];
+ const put=(group,item,metric,value,unit)=>rows.push([month,group,item,metric,value??'',unit]);
+ const s=d.summary||{};
+ [['ยอดขายทั้งหมด',s.revenue,'บาท'],['ต้นทุนเครื่องดื่ม',s.cogs,'บาท'],['กำไรขั้นต้น',Number(s.revenue||0)-Number(s.cogs||0),'บาท'],['ค่าใช้จ่ายที่บันทึก',s.expenses,'บาท'],['กำไรหลังหักค่าใช้จ่ายที่บันทึก',Number(s.revenue||0)-Number(s.cogs||0)-Number(s.expenses||0),'บาท'],['จำนวนแก้ว',s.drinks,'แก้ว'],['จำนวนรายการขาย',s.transactions,'รายการ']].forEach(x=>put('ภาพรวม','ทั้งร้าน',...x));
+ (d.menus||[]).forEach(x=>{put('เมนูขายออก',x.menu_name,'จำนวนแก้ว',x.drinks,'แก้ว');put('เมนูขายออก',x.menu_name,'ยอดขาย',x.revenue,'บาท');put('เมนูขายออก',x.menu_name,'ต้นทุน',x.cost,'บาท')});
+ (d.ingredients||[]).forEach(x=>{put('วัตถุดิบที่ใช้',x.stock_name,'ใช้จากการขาย',x.used_quantity,x.unit||'');put('วัตถุดิบที่ใช้',x.stock_name,'ต้นทุน',x.ingredient_cost,'บาท')});
+ (d.stock||[]).forEach(x=>{[['รับเข้า',x.received_quantity],['ใช้จากการขาย',x.sold_usage_quantity],['ของเสีย',x.waste_quantity],['คงเหลือปัจจุบัน (ไม่ใช่สิ้นเดือน)',x.current_quantity]].forEach(y=>put('สต็อก',x.stock_name,y[0],y[1],x.unit||''))});
+ (d.receipts||[]).forEach(x=>{put('รับสินค้า',x.stock_name,'ปริมาณรับเข้า',x.quantity,x.unit||'');put('รับสินค้า',x.stock_name,'มูลค่ารับเข้า',x.total_cost,'บาท')});
+ glurMonthlySaveCSV('GLUR_Monthly_Data_'+month+'.csv',rows);
 }
 function glurMonthlyExportExcel(){
  const d=glurMonthlyData;if(!d)return;
- if(typeof XLSX==='undefined'){
-  toast('ยังโหลดตัวสร้าง Excel ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต หรือใช้ CSV รวม');return;
- }
+ if(typeof XLSX==='undefined'){toast('ยังโหลดตัวสร้าง Excel ไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ต หรือใช้ CSV');return}
  const wb=XLSX.utils.book_new();
  glurMonthlyWorkbookSheets(d).forEach(section=>{
   const ws=XLSX.utils.aoa_to_sheet(section.rows);
-  ws['!cols']=section.rows[0]?.map((_,col)=>({wch:col===0?38:col===1?24:20}))||[];
-  if(section.name==='ภาพรวม')ws['!cols']=[{wch:40},{wch:24},{wch:14}];
+  const maxCols=Math.max(...section.rows.map(r=>r.length));
+  ws['!cols']=Array.from({length:maxCols},(_,j)=>({wch:j===0?42:j===1?22:24}));
+  const headerIndex=section.headerRow-1;
+  const lastIndex=section.rows.length-1;
+  if(lastIndex>headerIndex)ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:headerIndex,c:0},e:{r:lastIndex,c:maxCols-1}})};
+  for(let ri=headerIndex+1;ri<section.rows.length;ri++)for(let ci=0;ci<section.rows[ri].length;ci++){
+   const addr=XLSX.utils.encode_cell({r:ri,c:ci});const cell=ws[addr];
+   if(cell&&cell.t==='n')cell.z=section.name==='01 ภาพรวม'&&ci===1?'#,##0.00;[Red](#,##0.00)':'#,##0.###;[Red](#,##0.###)';
+  }
   XLSX.utils.book_append_sheet(wb,ws,section.name);
  });
  XLSX.writeFile(wb,'GLUR_Monthly_Report_'+(d.month||glurMonthlySelected)+'.xlsx');
@@ -1528,7 +1591,7 @@ function glurMonthlyExportExcel(){
 function renderReports(){
  if(!glurCanAdjust()){shell('รายงานรายเดือน','<div class="hint warn">เฉพาะ Owner / Manager เท่านั้น</div>');return}
  const m=glurMonthlySelected||glurThaiBusinessToday().slice(0,7);
- shell('รายงานรายเดือน · Monthly Bar Report',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyExcel">ดาวน์โหลด Excel ไฟล์เดียว (.xlsx) · 5 ชีต</button><button class="btn secondary full" style="margin-top:10px" id="monthlyCSV">ดาวน์โหลด CSV รวมไฟล์เดียว</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
+ shell('สรุปรายงานประจำเดือน',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyExcel">ดาวน์โหลดรายงาน Excel อ่านง่าย (.xlsx) · 5 ชีต</button><button class="btn secondary full" style="margin-top:10px" id="monthlyCSV">ดาวน์โหลด CSV ตารางมาตรฐาน (สำหรับกรองข้อมูล)</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
  document.getElementById('reportMonth').onchange=e=>glurMonthlyLoad(e.target.value);
  document.getElementById('monthlyRefresh').onclick=()=>glurMonthlyLoad(document.getElementById('reportMonth').value);
  const b=document.getElementById('monthlyCSV');if(b)b.onclick=glurMonthlyExportCSV;const e=document.getElementById('monthlyExcel');if(e)e.onclick=glurMonthlyExportExcel;
