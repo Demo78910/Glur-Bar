@@ -147,6 +147,64 @@ input::placeholder,textarea::placeholder{color:#89776d}
 }
 @media (max-width:849px){.nav .nav-group{display:none}}
 @media (min-width:850px) and (max-height:740px){.nav{padding-top:9px}.nav button{min-height:37px;padding-top:8px;padding-bottom:8px}.nav .nav-group{padding-top:11px;padding-bottom:4px}}
+
+/* GLUR BAR responsive layout — mobile / tablet / desktop */
+html{min-width:0;-webkit-text-size-adjust:100%}
+body{min-width:0;overflow-x:hidden}
+#app,.wrap,.card,.field,.item,.item>div,.tableline>span{min-width:0;max-width:100%}
+img,video,canvas,svg{max-width:100%;height:auto}
+.card{overflow-wrap:anywhere}
+button,input,select,textarea{max-width:100%}
+.row,.actions,.compact-toolbar{min-width:0}
+.actions{align-items:center}
+.tableline{align-items:flex-start}
+.tableline>strong{min-width:0;text-align:right;overflow-wrap:anywhere}
+:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+@media (max-width:649px){
+ .wrap{padding:12px 10px calc(108px + env(safe-area-inset-bottom))}
+ .top{padding:12px 13px}.brand{font-size:22px;letter-spacing:2px}
+ .page-title{font-size:19px;line-height:1.3}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .metric{font-size:clamp(17px,5vw,22px)}
+ .card{padding:11px;border-radius:12px}
+ .formgrid{grid-template-columns:minmax(0,1fr)}
+ .formgrid .wide{grid-column:1}
+ .row.between{flex-wrap:wrap;row-gap:9px}
+ .item{align-items:flex-start;flex-wrap:wrap}
+ .item>.actions{width:100%;justify-content:flex-start}
+ .compact-toolbar{flex-wrap:wrap;gap:6px}
+ .compact-toolbar input{flex:1 1 100%;width:100%}
+ .compact-toolbar .btn{flex:1 1 auto}
+ .actions .btn{min-height:38px}
+ .nav{gap:3px;scrollbar-width:thin;overscroll-behavior-x:contain}
+ .nav button{flex:0 0 auto;min-width:69px;min-height:51px;padding:7px 5px;font-size:10px}
+ .glur-account{flex-wrap:wrap;gap:5px}
+ .glur-account #glurAccountText{flex:1 1 170px}
+ .ingredient-row{grid-template-columns:minmax(0,1fr) minmax(65px,.6fr) 38px}
+ .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .kpi strong{font-size:14px}
+ .tableline{gap:8px}
+}
+@media (max-width:370px){
+ .grid{grid-template-columns:minmax(0,1fr)}
+ .kpi-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+ .nav button{min-width:65px}
+ .ingredient-row{grid-template-columns:minmax(0,1fr) 70px 34px;gap:4px}
+}
+@media (min-width:650px) and (max-width:849px){
+ .wrap{padding:20px 20px 105px}
+ .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .nav button{flex:1 0 74px}
+}
+@media (min-width:850px){
+ .wrap{width:100%;max-width:1500px;padding-right:clamp(18px,3vw,44px)}
+ .grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+ .formgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .nav{max-width:228px}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
