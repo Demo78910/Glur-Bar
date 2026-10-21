@@ -285,7 +285,9 @@ const glurSupabase = window.supabase.createClient(
 // Legacy local data is intentionally not loaded or written. Cloud is the source of truth.
 const blank=()=>({stock:[],recipes:[],sales:[],receipts:[],expenses:[]});
 let db=blank(),page='dashboard';
-const GLUR_SHOP_ID='bdd83213-8d38-42d7-bd35-835506dc25ac';
+const GLUR_LIVE_SHOP_ID='bdd83213-8d38-42d7-bd35-835506dc25ac';
+const GLUR_TEST_SHOP_ID='e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af';
+let GLUR_SHOP_ID=sessionStorage.getItem('glur_selected_mode')==='TEST'?GLUR_TEST_SHOP_ID:GLUR_LIVE_SHOP_ID;
 let cloudStock=[],cloudReady=false,cloudError='';
 
 function loadDB(){return blank()}
@@ -1738,6 +1740,64 @@ async function glurOwnerStockDialog(sid){
  stockDetailId=null;await loadCloudStock();renderStock();toast('ลบวัตถุดิบที่ไม่มีประวัติแล้ว');
 }
 
+</script>
+
+<style>
+#glurModeBar{position:fixed;right:16px;bottom:16px;z-index:9999;background:#211a17;border:1px solid #b86b3a;border-radius:12px;padding:10px 12px;color:#fff;box-shadow:0 6px 24px #0009;display:flex;gap:9px;align-items:center;font:13px sans-serif}
+#glurModeBar button{background:#3a2922;border:1px solid #b86b3a;color:#fff;border-radius:7px;padding:8px 12px;cursor:pointer}
+body.glur-test-mode #glurModeBar{background:#4c2511;border:2px solid #ff9a4f}
+body.glur-test-mode #glurModeBar strong{color:#ffb578}
+#glurModeBar .glur-mode-active{background:#ad4b19;color:white}
+</style>
+<script>
+// Two independent Supabase shop scopes. A full reload prevents cross-mode UI cache reuse.
+(function(){
+ const isTest=()=>GLUR_SHOP_ID===GLUR_TEST_SHOP_ID;
+ const bar=document.createElement('div');bar.id='glurModeBar';
+ bar.innerHTML='<strong id="glurModeLabel"></strong><button type="button" id="glurModeToggle"></button>';
+ document.body.appendChild(bar);
+ function paint(){
+  document.body.classList.toggle('glur-test-mode',isTest());
+  document.getElementById('glurModeLabel').textContent=isTest()?'🧪 TEST · ข้อมูลทดลอง':'● LIVE · ข้อมูลร้านจริง';
+  document.getElementById('glurModeToggle').textContent=isTest()?'กลับ LIVE':'สลับไป TEST';
+  bar.style.display=currentUser?'flex':'none';
+ }
+ async function toggle(){
+  if(!currentUser)return;
+  const target=isTest()?'LIVE':'TEST';
+  const btn=document.getElementById('glurModeToggle');btn.disabled=true;
+  try{
+   if(target==='TEST'){
+    const {data:auth,error:authError}=await glurSupabase.auth.getUser();
+    if(authError||!auth?.user)throw Error('กรุณาเข้าสู่ระบบใหม่');
+    const {data,error}=await glurSupabase.from('glur_members').select('role')
+      .eq('shop_id',GLUR_TEST_SHOP_ID).eq('user_id',auth.user.id).limit(1);
+    if(error)throw error;
+    if(!data?.some(x=>x.role==='owner'))throw Error('บัญชีนี้ยังไม่มีสิทธิ์ Owner ในร้าน TEST');
+   }
+   if(!confirm(target==='TEST'?'เข้าโหมด TEST? ข้อมูลจะถูกบันทึกในร้านทดลอง ไม่ใช่ LIVE':'กลับไปโหมด LIVE? การขายและการตัดสต๊อกจะเป็นข้อมูลจริง'))return;
+   sessionStorage.setItem('glur_selected_mode',target);
+   location.reload();
+  }catch(e){alert('สลับโหมดไม่ได้: '+(e.message||e))}
+  finally{btn.disabled=false}
+ }
+ document.getElementById('glurModeToggle').addEventListener('click',toggle);
+ const previousAuth=showAuthenticated;
+ showAuthenticated=function(user){previousAuth(user);paint()};
+ const previousSetPage=setPage;
+ const blockedInTest=new Set(['prebatch','employees','activity','audit','closing','closing-report','profit','reset','stock-count','stock-waste']);
+ setPage=function(p){if(isTest()&&blockedInTest.has(p)){toast('เมนูนี้ยังไม่เปิดใน TEST จนกว่าจะตรวจสอบการแยกข้อมูลของ RPC');return}previousSetPage(p)};
+ // Hide navigation entries that have not yet been audited for TEST safety.
+ const nav=document.getElementById('nav');
+ const observer=new MutationObserver(()=>{
+   if(!isTest())return;
+   nav.querySelectorAll('button[data-page]').forEach(b=>{
+     if(blockedInTest.has(b.dataset.page))b.style.display='none';
+   });
+ });
+ observer.observe(nav,{childList:true,subtree:true,attributes:false});
+ paint();
+})();
 </script>
 </body>
 </html>
