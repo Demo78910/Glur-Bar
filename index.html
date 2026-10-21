@@ -876,7 +876,9 @@ function renderGlurSales(){
     if(!r){document.getElementById('glurSalePreview').textContent='เลือกเมนูเพื่อดูวัตถุดิบที่จะตัด';return}
     const ing=(r.ingredients||[]).map(i=>{
       const st=cloudStock.find(x=>x.id===i.stock_id),needed=num(i.quantity)*qty;
-      return `${st?.name||'ไม่พบวัตถุดิบ'} ${needed} ${st?.unit||''}${st&&num(st.quantity)-needed<0?' ⚠ อาจติดลบ':''}`;
+      const available=st?num(st.quantity):null;
+      const shortage=st?Math.max(0,needed-available):null;
+      return `${st?.name||'⚠ ไม่พบวัตถุดิบในสต๊อก'} · ใช้ ${needed} ${st?.unit||''}${st?` · เหลือ ${available} ${st.unit||''}`:''}${shortage>0?` · ⚠ ขาด ${Number(shortage.toFixed(3))} ${st.unit||''}`:''}`;
     });
     document.getElementById('glurSalePreview').textContent=ing.length?'ตัดตามสูตร: '+ing.join(' · '):'⚠ สูตรนี้ไม่มีรายการส่วนผสม';
   };
@@ -896,8 +898,14 @@ function renderGlurSales(){
     const qty=Number(form.elements.quantity.value),note=String(form.elements.note.value||'').trim();
     if(!r||r.is_active===false||!Number.isInteger(qty)||qty<=0){toast('เลือกเมนูที่เปิดใช้งานและจำนวนแก้วที่ถูกต้อง');return}
     if(!(r.ingredients||[]).length){toast('สูตรนี้ยังไม่มีส่วนผสม');return}
-    const wouldGoNegative=(r.ingredients||[]).some(i=>{const st=cloudStock.find(x=>x.id===i.stock_id);return st&&num(st.quantity)-num(i.quantity)*qty<0});
-    if(!confirm(`ยืนยันขาย ${r.name} จำนวน ${qty} แก้ว ยอด ${money(num(r.selling_price)*qty)}${wouldGoNegative?'\n⚠ มีวัตถุดิบที่อาจติดลบ':''}?`))return;
+    const stockWarnings=(r.ingredients||[]).map(i=>{
+      const st=cloudStock.find(x=>x.id===i.stock_id);
+      if(!st)return 'ไม่พบวัตถุดิบในสต๊อก (รหัส '+i.stock_id+')';
+      const missing=num(i.quantity)*qty-num(st.quantity);
+      return missing>0?`${st.name}: ขาด ${Number(missing.toFixed(3))} ${st.unit||''}`:null;
+    }).filter(Boolean);
+    const warningText=stockWarnings.length?'\n\n⚠ ตรวจสอบสต๊อกก่อนขาย:\n'+stockWarnings.join('\n')+'\n\nการขายอาจทำให้สต๊อกติดลบ หรือถูกฐานข้อมูลปฏิเสธ':'';
+    if(!confirm(`ยืนยันขาย ${r.name} จำนวน ${qty} แก้ว\nยอด ${money(num(r.selling_price)*qty)}${warningText}\n\nดำเนินการต่อ?`))return;
     glurSalesBusy=true;
     const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='กำลังบันทึก…';
     try{
