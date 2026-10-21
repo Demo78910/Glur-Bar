@@ -810,7 +810,7 @@ function renderGlurSales(){
     const ingredients=glurSaleIngredients.filter(i=>i.sale_id===s.id);
     const adjustButton=glurCanAdjust()&&ingredients.length?`<button type="button" class="btn secondary smallbtn" data-glur-adjust="${s.id}" style="margin-top:9px">ปรับวัตถุดิบที่ใช้จริง</button>`:'';
     const editor=glurEditingSaleId===s.id&&glurCanAdjust()?glurAdjustmentEditor(s,ingredients):'';
-    return `<div class="item"><div style="min-width:0"><div class="item-name">${name}</div><div class="small muted">${esc(glurSaleDate(s.sold_at||s.created_at))} · ต้นทุน ${money(s.total_cost)}</div>${s.note?`<div class="small muted" style="white-space:pre-wrap">หมายเหตุ: ${esc(s.note)}</div>`:''}<div class="small muted">โต๊ะ: ${esc(glurTableName(s.id))}</div><button type="button" class="btn secondary smallbtn" data-move-sale="${s.id}">ย้ายโต๊ะ</button>${adjustButton}${editor}</div><strong style="white-space:nowrap">${money(s.total_amount)}</strong></div>`;
+    return `<div class="item"><div style="min-width:0"><div class="item-name">${name}</div><div class="small muted">${esc(glurSaleDate(s.sold_at||s.created_at))} · ต้นทุน ${money(s.total_cost)}</div>${s.note?`<div class="small muted" style="white-space:pre-wrap">หมายเหตุ: ${esc(s.note)}</div>`:''}${adjustButton}${editor}</div><strong style="white-space:nowrap">${money(s.total_amount)}</strong></div>`;
   }).join('');
   shell('ขายเครื่องดื่ม · ออนไลน์',`
     <div class="hint">บันทึกยอดขายและตัดสต๊อกผ่าน Supabase · Staff / Manager / Owner บันทึกขายและหมายเหตุได้ · หมายเหตุไม่เปลี่ยนปริมาณที่ตัดตามสูตร</div>
@@ -818,7 +818,7 @@ function renderGlurSales(){
     <div class="card">
       <div class="section-title" style="margin-top:0">บันทึกการขาย</div>
       ${recipeCloudError?`<div class="hint warn">โหลดสูตรไม่ได้: ${esc(recipeCloudError)}</div>`:''}
-      <form id="glurCloudSaleForm" class="stack"><div class="field"><label>โต๊ะที่สั่ง</label><select name="table_id" required><option value="">— เลือกโต๊ะ —</option>${glurTables.filter(t=>t.is_active).map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select></div>
+      <form id="glurCloudSaleForm" class="stack">
         <div class="field"><label>ค้นหาเมนู</label><input id="glurSaleSearch" placeholder="พิมพ์ชื่อค็อกเทล…" value="${esc(glurSalesSearch)}"></div>
         <div class="field"><label>เมนูเครื่องดื่ม</label><select name="recipe_id" required>
           <option value="">— เลือกเมนู —</option>
@@ -833,14 +833,11 @@ function renderGlurSales(){
         <button type="submit" class="btn full" ${glurSalesBusy||!cloudRecipes.some(r=>r.is_active!==false)?'disabled':''}>${glurSalesBusy?'กำลังบันทึก…':'ยืนยันขายและตัดสต๊อก'}</button>
       </form>
     </div>
-    <div class="card"><strong>จัดการโต๊ะ</strong><div class="small muted">Owner / Manager / Supervisor สร้างโต๊ะได้ · ทุกตำแหน่งดูออเดอร์และย้ายโต๊ะได้</div><div class="actions" style="margin-top:10px"><button type="button" class="btn secondary smallbtn" id="glurTablesToday">ดูออเดอร์ตามโต๊ะวันนี้</button>${['owner','manager','supervisor'].includes(glurAdjustRole)?'<button type="button" class="btn smallbtn" id="glurCreateTable">＋ สร้างโต๊ะ</button>':''}</div><div id="glurTableTodayOutput"></div></div><div class="row between"><div class="section-title">ประวัติการขายล่าสุด</div><button class="btn secondary smallbtn" id="glurRefreshSales">↻ รีเฟรช</button></div>
+    <div class="row between"><div class="section-title">ประวัติการขายล่าสุด</div><button class="btn secondary smallbtn" id="glurRefreshSales">↻ รีเฟรช</button></div>
     ${glurSalesError?`<div class="hint warn">โหลดประวัติไม่ได้: ${esc(glurSalesError)}</div>`:''}
     <div class="card">${!glurSalesReady&&!glurSalesError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติการขาย')}</div>
     <div class="small muted">แสดง ${glurSaleHistoryLimit} รายการล่าสุด · ข้อมูลยอดขายจาก Supabase · หากไม่มีชื่อเมนูในประวัติ แสดงเฉพาะยอดรวมจากบิล</div>
   `);
-  document.getElementById('glurCreateTable')?.addEventListener('click',async()=>{const name=prompt('ชื่อโต๊ะใหม่ เช่น A1 / VIP 1');if(!name?.trim())return;const {error}=await glurSupabase.rpc('glur_create_table',{p_shop_id:GLUR_SHOP_ID,p_name:name.trim()});if(error){toast('สร้างโต๊ะไม่สำเร็จ: '+error.message);return}await glurLoadTables();toast('สร้างโต๊ะแล้ว');renderGlurSales()});
-  document.getElementById('glurTablesToday')?.addEventListener('click',()=>{const out=document.getElementById('glurTableTodayOutput');const businessDate=v=>{const d=new Date(v);d.setTime(d.getTime()-3*3600000);return d.toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'})};const today=businessDate(new Date());const list=glurSales.filter(s=>businessDate(s.sold_at||s.created_at)===today);out.innerHTML='<div class="section-title">ออเดอร์วันนี้ ('+esc(today)+')</div>'+(glurTables.map(t=>{const sales=list.filter(s=>glurSaleTableMap[s.id]===t.id);return sales.length?'<div class="card"><strong>'+esc(t.name)+'</strong>'+sales.map(s=>'<div class="tableline"><span>'+esc(s.recipe_name||'รายการขาย')+' × '+num(s.quantity_sold||1)+' · '+esc(glurSaleDate(s.sold_at||s.created_at))+'</span><strong>'+money(s.total_amount)+'</strong></div>').join('')+'</div>':''}).join('')||'<div class="small muted">ยังไม่มีออเดอร์ในประวัติที่โหลดมา</div>')+'<div class="small muted">แสดงจากรายการขายล่าสุดที่โหลดไว้ หากต้องการประวัติครบทั้งวันควรเพิ่มการค้นหาฝั่งฐานข้อมูลตามช่วงเวลา</div>';});
-  document.querySelectorAll('[data-move-sale]').forEach(b=>b.onclick=async()=>{const saleId=b.dataset.moveSale;const old=glurTableName(saleId);const names=glurTables.filter(t=>t.is_active).map(t=>t.name).join(', ');const target=prompt('ย้ายรายการจาก '+old+' ไปโต๊ะใด?\nโต๊ะที่มี: '+names);if(!target)return;const t=glurTables.find(t=>t.is_active&&t.name.toLowerCase()===target.trim().toLowerCase());if(!t){toast('ไม่พบโต๊ะปลายทาง');return}const reason=prompt('เหตุผลที่ย้ายโต๊ะ (อย่างน้อย 3 ตัวอักษร)');if(!reason||reason.trim().length<3)return;if(!confirm('ยืนยันย้ายรายการจาก '+old+' ไป '+t.name+'?\nยอดขายและสต็อกจะไม่ถูกบันทึกซ้ำ'))return;const {error}=await glurSupabase.rpc('glur_move_sale_table',{p_shop_id:GLUR_SHOP_ID,p_sale_id:saleId,p_new_table_id:t.id,p_reason:reason.trim()});if(error){toast('ย้ายไม่สำเร็จ: '+error.message);return}await glurLoadTables();toast('ย้ายโต๊ะสำเร็จ');renderGlurSales()});
   document.querySelectorAll('[data-glur-adjust]').forEach(btn=>btn.onclick=()=>{
     glurEditingSaleId=glurEditingSaleId===btn.dataset.glurAdjust?null:btn.dataset.glurAdjust;
     renderGlurSales();
@@ -904,10 +901,8 @@ function renderGlurSales(){
     glurSalesBusy=true;
     const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='กำลังบันทึก…';
     try{
-      const tableId=form.elements.table_id?.value;
-      if(!tableId)throw Error('กรุณาเลือกโต๊ะก่อนบันทึกขาย');
-      const {error}=await glurSupabase.rpc('glur_record_sale_at_table',{
-        p_shop_id:GLUR_SHOP_ID,p_recipe_id:rid,p_quantity:qty,p_table_id:tableId,p_note:note||null
+      const {error}=await glurSupabase.rpc('glur_record_sale_v2',{
+        p_shop_id:GLUR_SHOP_ID,p_recipe_id:rid,p_quantity:qty,p_note:note||null
       });
       if(error)throw error;
       toast('บันทึกการขายออนไลน์สำเร็จ');
@@ -1735,21 +1730,6 @@ async function glurOwnerStockDialog(sid){
  stockDetailId=null;await loadCloudStock();renderStock();toast('ลบวัตถุดิบที่ไม่มีประวัติแล้ว');
 }
 
-let glurTables=[],glurSaleTableMap={};
-function glurTableName(saleId){const id=glurSaleTableMap[saleId];return glurTables.find(t=>t.id===id)?.name||'ไม่ระบุโต๊ะ (รายการเก่า)'}
-async function glurLoadTables(){
- if(!currentUser)return;
- const [tables,assignments]=await Promise.all([
- glurSupabase.from('glur_dining_tables').select('id,name,is_active').eq('shop_id',GLUR_SHOP_ID).order('name'),
- glurSupabase.from('glur_sale_tables').select('sale_id,table_id').eq('shop_id',GLUR_SHOP_ID).limit(10000)
- ]);
- if(tables.error){toast('โหลดโต๊ะไม่ได้: '+tables.error.message);return}
- glurTables=tables.data||[];
- if(!assignments.error)glurSaleTableMap=Object.fromEntries((assignments.data||[]).map(x=>[x.sale_id,x.table_id]));
- if(page==='sales')renderGlurSales();
-}
-const glurTablePreviousLoadSales=loadGlurSales;
-loadGlurSales=async function(){await glurTablePreviousLoadSales();await glurLoadTables()};
 </script>
 </body>
 </html>
