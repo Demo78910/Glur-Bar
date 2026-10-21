@@ -1743,11 +1743,12 @@ async function glurOwnerStockDialog(sid){
 </script>
 
 <style>
-#glurModeBar{position:fixed;right:16px;bottom:16px;z-index:9999;background:#211a17;border:1px solid #b86b3a;border-radius:12px;padding:10px 12px;color:#fff;box-shadow:0 6px 24px #0009;display:flex;gap:9px;align-items:center;font:13px sans-serif}
+#glurModeBar{position:relative;z-index:1;width:100%;box-sizing:border-box;justify-content:space-between;flex-wrap:wrap;background:#211a17;border:1px solid #b86b3a;border-radius:0;padding:9px 26px;color:#fff;box-shadow:none;display:flex;gap:9px;align-items:center;font:13px sans-serif}
 #glurModeBar button{background:#3a2922;border:1px solid #b86b3a;color:#fff;border-radius:7px;padding:8px 12px;cursor:pointer}
 body.glur-test-mode #glurModeBar{background:#4c2511;border:2px solid #ff9a4f}
 body.glur-test-mode #glurModeBar strong{color:#ffb578}
 #glurModeBar .glur-mode-active{background:#ad4b19;color:white}
+@media(max-width:649px){#glurModeBar{padding:8px 12px;gap:6px;font-size:12px}#glurModeBar button{padding:7px 10px;font-size:12px}}
 </style>
 <script>
 // Two independent Supabase shop scopes. A full reload prevents cross-mode UI cache reuse.
@@ -1755,7 +1756,7 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  const isTest=()=>GLUR_SHOP_ID===GLUR_TEST_SHOP_ID;
  const bar=document.createElement('div');bar.id='glurModeBar';
  bar.innerHTML='<strong id="glurModeLabel"></strong><button type="button" id="glurModeToggle"></button>';
- document.body.appendChild(bar);
+ document.getElementById('glurAccount').insertAdjacentElement('afterend',bar);
  function paint(){
   document.body.classList.toggle('glur-test-mode',isTest());
   document.getElementById('glurModeLabel').textContent=isTest()?'🧪 TEST · ข้อมูลทดลอง':'● LIVE · ข้อมูลร้านจริง';
