@@ -46,11 +46,12 @@ function saveDB(){
 }
 function showLogin(message='เข้าสู่ระบบเพื่อใช้งานข้อมูลออนไลน์'){
  document.getElementById('nav').classList.add('hidden');
- document.getElementById('app').innerHTML=`<div class="page-title">GLUR BAR CLOUD</div><div class="card"><div class="hint">${esc(message)}</div><form id="loginForm" class="stack"><div class="field"><label>ชื่อผู้ใช้ (ID)</label><input name="username" autocomplete="username" required></div><div class="field"><label>รหัสผ่าน</label><input name="password" type="password" autocomplete="current-password" required></div><button class="btn full" type="submit">เข้าสู่ระบบ</button></form></div>`;
+ document.getElementById('app').innerHTML=`<div class="page-title">GLUR BAR CLOUD</div><div class="card"><div class="hint">${esc(message)}</div><form id="loginForm" class="stack"><div class="field"><label>อีเมล Supabase (หรือ ID แบบเดิม)</label><input name="username" autocomplete="username" required></div><div class="field"><label>รหัสผ่าน</label><input name="password" type="password" autocomplete="current-password" required></div><button class="btn full" type="submit">เข้าสู่ระบบ</button></form></div>`;
  document.getElementById('loginForm').onsubmit=async e=>{
   e.preventDefault();const f=new FormData(e.target),username=String(f.get('username')).trim().toLowerCase();
-  if(!/^[a-z0-9_-]{3,32}$/.test(username)){toast('ID ต้องเป็น a-z, 0-9, _ หรือ - (3–32 ตัว)');return}
-  const {error}=await cloud.auth.signInWithPassword({email:username+'@glurbar.invalid',password:String(f.get('password'))});
+  if(!username.includes('@') && !/^[a-z0-9_-]{3,32}$/.test(username)){toast('กรอกอีเมล Supabase หรือ ID ที่ถูกต้อง');return}
+  const loginEmail=username.includes('@') ? username : username+'@glurbar.invalid';
+  const {error}=await cloud.auth.signInWithPassword({email:loginEmail,password:String(f.get('password'))});
   if(error)toast('เข้าสู่ระบบไม่สำเร็จ: ตรวจสอบ ID และรหัสผ่าน');
  };
 }
