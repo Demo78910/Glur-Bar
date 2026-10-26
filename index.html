@@ -298,7 +298,30 @@ function money(n){return new Intl.NumberFormat('th-TH',{style:'currency',currenc
 function num(v){const n=Number(v);return Number.isFinite(n)?n:0}
 function dateNow(){return new Date().toISOString().slice(0,10)}
 function monthNow(){return dateNow().slice(0,7)}
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.add('hidden'),2400)}
+// Centralized, user-friendly failure reporting. No credentials or tokens are displayed.
+function glurExplainFailure(message){
+ const m=String(message||'ไม่ทราบสาเหตุ');
+ if(/row.level.security|permission denied|42501|403|ไม่มีสิทธิ์|เฉพาะ.*เท่านั้น/i.test(m))return 'บัญชีนี้อาจไม่มีสิทธิ์ทำรายการ หรือกฎสิทธิ์ใน Supabase ไม่อนุญาต • ตรวจสอบบทบาทผู้ใช้และโหมด TEST/LIVE';
+ if(/jwt|session|unauthori[sz]ed|401|not authenticated|เข้าสู่ระบบ/i.test(m))return 'การเข้าสู่ระบบอาจหมดอายุ • ลองออกจากระบบแล้วเข้าสู่ระบบใหม่';
+ if(/fetch|network|failed to fetch|offline|timeout|connection/i.test(m))return 'อาจเชื่อมต่ออินเทอร์เน็ตหรือ Supabase ไม่ได้ • ตรวจสอบเครือข่ายแล้วลองอีกครั้ง';
+ if(/duplicate|unique|23505/i.test(m))return 'ข้อมูลนี้อาจซ้ำกับรายการที่มีอยู่แล้ว • ตรวจสอบชื่อหรือรายการเดิม';
+ if(/foreign key|23503|violates.*constraint/i.test(m))return 'ข้อมูลนี้อาจเชื่อมโยงกับรายการอื่นอยู่ • ตรวจสอบสูตร ยอดขาย หรือวัตถุดิบที่เกี่ยวข้อง';
+ if(/not.null|23502|invalid input|22p02|กรุณา|ไม่ถูกต้อง|ตรวจสอบข้อมูล/i.test(m))return 'ข้อมูลที่กรอกอาจไม่ครบหรือไม่ถูกต้อง • ตรวจสอบช่องที่จำเป็นและค่าตัวเลข';
+ if(/not found|pgrst202|42883|does not exist|404/i.test(m))return 'ไม่พบฟังก์ชันหรือตารางที่ระบบต้องใช้ • ตรวจสอบว่าอัปเดต SQL ใน Supabase แล้ว';
+ if(/สต๊อกไม่พอ/i.test(m))return 'ปริมาณคงเหลือน้อยกว่าที่ต้องใช้ • ตรวจสอบสต๊อกหรือปรับจำนวนขาย';
+ return 'ระบบไม่สามารถระบุสาเหตุที่แน่นอนได้จากข้อความนี้ • ตรวจสอบรายละเอียดด้านล่างก่อนลองใหม่';
+}
+function glurShowFailure(message){
+ let d=document.getElementById('glurFailureDialog');
+ if(!d){d=document.createElement('dialog');d.id='glurFailureDialog';d.style.cssText='border:1px solid #ba6538;border-radius:16px;background:#241b18;color:#fff2e8;max-width:min(92vw,520px);width:100%;padding:22px;box-shadow:0 20px 60px #0009';d.innerHTML='<h3 style="margin:0 0 12px">⚠️ ทำรายการไม่สำเร็จ</h3><p id="glurFailureReason" style="line-height:1.7"></p><details style="margin:14px 0"><summary>รายละเอียดข้อผิดพลาด</summary><pre id="glurFailureRaw" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px"></pre></details><button id="glurFailureClose" type="button" style="padding:10px 20px;border-radius:9px;background:#ed9b5b;color:#26150c;border:0;font-weight:700">เข้าใจแล้ว</button>';document.body.appendChild(d);d.querySelector('#glurFailureClose').onclick=()=>d.close()}
+ const raw=String(message||'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ').slice(0,900).replace(/(eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/g,'[hidden token]');
+ d.querySelector('#glurFailureReason').textContent=glurExplainFailure(raw);
+ d.querySelector('#glurFailureRaw').textContent=raw;
+ if(!d.open)d.showModal();
+}
+function toast(msg){const text=String(msg??'');const t=document.getElementById('toast');t.textContent=text;t.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.add('hidden'),3600);if(/ไม่สำเร็จ|ไม่ได้|ไม่สามารถ|ผิดพลาด|ไม่ถูกต้อง|ไม่มีสิทธิ์|สต๊อกไม่พอ|กรุณา|ล้มเหลว|error:/i.test(text))glurShowFailure(text)}
+window.addEventListener('unhandledrejection',event=>{const msg=event.reason?.message||String(event.reason||'ข้อผิดพลาดที่ไม่ทราบสาเหตุ');glurShowFailure('เกิดข้อผิดพลาดระหว่างติดต่อระบบ: '+msg)});
+window.addEventListener('error',event=>{if(event.message)glurShowFailure('เกิดข้อผิดพลาดในการทำงานของหน้าเว็บ: '+event.message)});
 function setPage(p){if(!currentUser)return;page=p;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));render()}
 document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)setPage(b.dataset.page)});
 function stockById(sid){return db.stock.find(s=>s.id===sid)}
