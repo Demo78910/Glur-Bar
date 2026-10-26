@@ -2005,5 +2005,38 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  paint();
 })();
 </script>
+
+<script>
+/* GLUR BAR: visibility/access layer. Database RLS/RPC remain the security boundary. */
+(function(){
+ const rules={stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
+ let ready=false;
+ const has=k=>glurAdjustRole==='owner'||(ready&&glurMyPermissions?.[k]===true);
+ const can=p=>!rules[p]||rules[p].some(has);
+ const hide=(el,yes)=>{if(el){el.classList.toggle('hidden',yes);if(yes)el.style.setProperty('display','none','important');else el.style.removeProperty('display')}};
+ function apply(){
+  if(!currentUser)return;
+  document.querySelectorAll('#nav button[data-page]').forEach(b=>{const p=b.dataset.page;if(rules[p])hide(b,!can(p))});
+  document.querySelectorAll('#nav .nav-group').forEach(g=>{let n=g.nextElementSibling,visible=false;while(n&&!n.classList.contains('nav-group')){if(n.matches('button[data-page]')&&getComputedStyle(n).display!=='none')visible=true;n=n.nextElementSibling}hide(g,!visible)});
+  if(!can(page)){const old=page;page='dashboard';document.querySelectorAll('#nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='dashboard'));if(old!=='dashboard')render();return}
+  if(page==='stock'||page==='recipes'){
+   const area=document.getElementById('app');if(!area)return;
+   const selectorMap={stock:{stock_create:['#stockAdd','#stockNew','#stockCreate','[data-stock-create]'],stock_edit:['#stockEdit','[data-stock-edit]'],stock_delete:['#stockDelete','[data-stock-delete]'],stock_waste:['[data-stock-waste]']},recipes:{recipes_create:['#recipeNew','#recipeAdd','#recipeForm','#cloudRecipeForm'],recipes_edit:['#recipeEdit','[data-recipe-edit]'],recipes_delete:['#recipePermanentDelete','#recipeArchive','[data-recipe-delete]']}};
+   for(const [key,selectors] of Object.entries(selectorMap[page]))for(const sel of selectors)area.querySelectorAll(sel).forEach(el=>hide(el,!has(key)));
+  }
+ }
+ const oldSet=setPage;
+ setPage=function(p){if(!can(p)){toast('บัญชีนี้ไม่ได้รับสิทธิ์เข้าหน้านี้');return}oldSet(p);apply()};
+ const oldRender=render;
+ render=function(){if(!can(page)){page='dashboard'}oldRender();apply()};
+ const oldLoad=glurLoadMyPermissions;
+ glurLoadMyPermissions=async function(){ready=false;await oldLoad();ready=true;apply()};
+ const oldAuth=showAuthenticated;
+ showAuthenticated=function(u){ready=false;oldAuth(u);apply()};
+ // Recheck on tab return; avoid showing privileged controls after a role change.
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentUser)glurLoadMyPermissions()});
+ window.glurApplyPermissionVisibility=apply;
+})();
+</script>
 </body>
 </html>
