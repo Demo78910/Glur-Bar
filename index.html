@@ -803,6 +803,37 @@ async function loadGlurSales(){
   if(currentUser&&page==='sales')renderGlurSales();
 }
 function glurSaleDate(v){try{return new Date(v).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'})}catch(e){return '—'}}
+// Custom Cocktail — quantities and prices are selected per sale, never written to a permanent recipe.
+let glurCustomOpen=false,glurCustomBusy=false,glurCustomRows=[{stock_id:'',quantity:'30'}],glurCustomName='Custom Cocktail',glurCustomPrice='',glurCustomQty='1',glurCustomNote='';
+function glurRenderCustomCocktail(){
+ const root=document.getElementById('glurCustomCocktailMount');if(!root)return;
+ const cost=glurCustomRows.reduce((sum,r)=>{const st=cloudStock.find(s=>s.id===r.stock_id);return sum+(st?Number(st.cost_per_unit||0)*Number(r.quantity||0):0)},0)*Number(glurCustomQty||1);
+ const valid=glurCustomRows.length>0&&glurCustomRows.every(r=>r.stock_id&&Number(r.quantity)>0);
+ const options=cloudStock.filter(s=>s.is_active!==false).map(s=>`<option value="${esc(s.id)}">${esc(s.name)} (${esc(s.unit||'ml')} · เหลือ ${num(s.quantity)})</option>`).join('');
+ root.innerHTML=`<div class="card" style="border:1px solid #9b582f"><div class="row between" style="gap:10px;align-items:center"><div><div class="section-title" style="margin:0">✦ Custom Cocktail</div><div class="small muted">เลือกเหล้าและส่วนผสมได้อิสระ ไม่ต้องสร้างสูตรล่วงหน้า</div></div><button type="button" class="btn secondary smallbtn" id="glurCustomToggle">${glurCustomOpen?'ปิด':'สร้าง Custom'}</button></div>${glurCustomOpen?`<form id="glurCustomForm" class="stack" style="margin-top:14px"><div class="field"><label>ชื่อค็อกเทล</label><input name="custom_name" maxlength="150" value="${esc(glurCustomName)}" required></div><div class="section-title" style="margin:0">วัตถุดิบต่อแก้ว</div>${glurCustomRows.map((r,i)=>`<div class="formgrid" style="align-items:end;gap:8px"><div class="field"><label>วัตถุดิบ ${i+1}</label><select data-custom-stock="${i}" required><option value="">— เลือกวัตถุดิบ —</option>${options}</select></div><div class="field"><label>ปริมาณ (${esc(cloudStock.find(s=>s.id===r.stock_id)?.unit||'หน่วย')})</label><input data-custom-qty="${i}" type="number" step="any" min="0.001" value="${esc(r.quantity)}" required></div><button type="button" class="btn secondary smallbtn" data-custom-remove="${i}">ลบ</button></div>`).join('')}<button type="button" class="btn secondary" id="glurCustomAdd">＋ เพิ่มวัตถุดิบ</button><div class="formgrid"><div class="field"><label>จำนวนแก้ว</label><input name="custom_qty" type="number" min="1" step="1" value="${esc(glurCustomQty)}" required></div><div class="field"><label>ราคาขายต่อแก้ว (บาท)</label><input name="custom_price" type="number" min="0" step="0.01" value="${esc(glurCustomPrice)}" required></div></div><div class="field"><label>หมายเหตุ</label><textarea name="custom_note" rows="2" maxlength="2000">${esc(glurCustomNote)}</textarea></div><div id="glurCustomPreview" class="hint"></div><button type="submit" class="btn full" ${glurCustomBusy||!valid?'disabled':''}>${glurCustomBusy?'กำลังบันทึก…':'ยืนยัน Custom Cocktail และตัดสต๊อก'}</button><div class="small muted">ระบบต้องติดตั้ง RPC glur_record_custom_cocktail ใน Supabase ก่อนจึงจะขายได้ · ต้นทุนคำนวณจากต้นทุนต่อหน่วยในสต๊อก</div></form>`:''}</div>`;
+ root.querySelector('#glurCustomToggle').onclick=()=>{glurCustomOpen=!glurCustomOpen;glurRenderCustomCocktail()};
+ if(!glurCustomOpen)return;
+ const form=root.querySelector('#glurCustomForm');
+ const snapshot=()=>{glurCustomName=form.elements.custom_name.value;glurCustomPrice=form.elements.custom_price.value;glurCustomQty=form.elements.custom_qty.value;glurCustomNote=form.elements.custom_note.value;root.querySelectorAll('[data-custom-stock]').forEach(el=>glurCustomRows[Number(el.dataset.customStock)].stock_id=el.value);root.querySelectorAll('[data-custom-qty]').forEach(el=>glurCustomRows[Number(el.dataset.customQty)].quantity=el.value)};
+ const preview=()=>{snapshot();const qty=Number(glurCustomQty),price=Number(glurCustomPrice);const sum=glurCustomRows.reduce((v,r)=>v+Number(r.quantity||0)*Number(cloudStock.find(s=>s.id===r.stock_id)?.cost_per_unit||0),0);const shortages=glurCustomRows.map(r=>{const st=cloudStock.find(s=>s.id===r.stock_id);return st&&Number(r.quantity)*qty>Number(st.quantity)?`${st.name}: ขาด ${(Number(r.quantity)*qty-Number(st.quantity)).toFixed(2)} ${st.unit}`:null}).filter(Boolean);root.querySelector('#glurCustomPreview').textContent=`ต้นทุนประมาณ ${money(sum*qty)} · ยอดขาย ${money(price*qty)} · กำไรขั้นต้นประมาณ ${money((price-sum)*qty)}${shortages.length?' · ⚠ '+shortages.join(' / '):''}`;form.querySelector('[type=submit]').disabled=glurCustomBusy||!glurCustomRows.length||glurCustomRows.some(r=>!r.stock_id||!(Number(r.quantity)>0))};
+ root.querySelectorAll('[data-custom-stock]').forEach(el=>{el.value=glurCustomRows[Number(el.dataset.customStock)].stock_id;el.onchange=preview});
+ root.querySelectorAll('[data-custom-qty]').forEach(el=>el.oninput=preview);
+ ['custom_name','custom_price','custom_qty','custom_note'].forEach(k=>form.elements[k].oninput=preview);
+ root.querySelector('#glurCustomAdd').onclick=()=>{snapshot();glurCustomRows.push({stock_id:'',quantity:'15'});glurRenderCustomCocktail()};
+ root.querySelectorAll('[data-custom-remove]').forEach(b=>b.onclick=()=>{snapshot();glurCustomRows.splice(Number(b.dataset.customRemove),1);glurRenderCustomCocktail()});
+ form.onsubmit=async e=>{e.preventDefault();snapshot();if(glurCustomBusy)return;
+  const qty=Number(glurCustomQty),price=Number(glurCustomPrice),name=glurCustomName.trim();
+  if(!name||!Number.isInteger(qty)||qty<1||!Number.isFinite(price)||price<0||!glurCustomRows.length||glurCustomRows.some(r=>!r.stock_id||!Number.isFinite(Number(r.quantity))||Number(r.quantity)<=0)){toast('ตรวจสอบข้อมูล Custom Cocktail');return}
+  const combined=new Map();for(const r of glurCustomRows)combined.set(r.stock_id,(combined.get(r.stock_id)||0)+Number(r.quantity));
+  const items=[...combined].map(([stock_id,quantity])=>({stock_id,quantity}));
+  const shortages=items.map(i=>{const st=cloudStock.find(s=>s.id===i.stock_id);return !st?'ไม่พบวัตถุดิบ':i.quantity*qty>Number(st.quantity)?`${st.name}: ขาด ${(i.quantity*qty-Number(st.quantity)).toFixed(2)} ${st.unit}`:null}).filter(Boolean);
+  if(shortages.length){toast('สต๊อกไม่พอ: '+shortages.join(', '));return}
+  if(!confirm(`ขาย ${name} × ${qty} แก้ว\nยอดรวม ${money(price*qty)}\nใช้วัตถุดิบ ${items.length} ชนิด\n\nยืนยันตัดสต๊อก?`))return;
+  glurCustomBusy=true;glurRenderCustomCocktail();
+  try{const {error}=await glurSupabase.rpc('glur_record_custom_cocktail',{p_shop_id:GLUR_SHOP_ID,p_name:name,p_unit_price:price,p_quantity:qty,p_ingredients:items,p_note:glurCustomNote.trim()||null});if(error)throw error;toast('บันทึก Custom Cocktail สำเร็จ');glurCustomRows=[{stock_id:'',quantity:'30'}];glurCustomPrice='';glurCustomNote='';glurCustomOpen=false;await Promise.all([loadCloudStock(),loadGlurSales()]);if(page==='sales')renderGlurSales()}catch(err){toast('บันทึกไม่สำเร็จ: '+(err.message||err))}finally{glurCustomBusy=false;glurRenderCustomCocktail()}
+ };
+ preview();
+}
 function renderGlurSales(){
   const recipes=cloudRecipes.filter(r=>r.is_active!==false&&String(r.name||'').toLowerCase().includes(glurSalesSearch.toLowerCase()));
   const negatives=cloudStock.filter(x=>num(x.quantity)<0);
@@ -817,6 +848,7 @@ function renderGlurSales(){
   shell('ขายเครื่องดื่ม · ออนไลน์',`
     <div class="hint">บันทึกยอดขายและตัดสต๊อกผ่าน Supabase · Staff / Manager / Owner บันทึกขายและหมายเหตุได้ · หมายเหตุไม่เปลี่ยนปริมาณที่ตัดตามสูตร</div>
     ${negatives.length?`<div class="card" style="border-color:#b94d41"><strong class="warn">⚠ สต๊อกติดลบ ${negatives.length} รายการ</strong>${negatives.map(x=>`<div class="tableline"><span>${esc(x.name)}</span><strong class="warn">${num(x.quantity)} ${esc(x.unit)}</strong></div>`).join('')}</div>`:''}
+    <div id="glurCustomCocktailMount"></div>
     <div class="card">
       <div class="section-title" style="margin-top:0">บันทึกการขาย</div>
       ${recipeCloudError?`<div class="hint warn">โหลดสูตรไม่ได้: ${esc(recipeCloudError)}</div>`:''}
@@ -840,6 +872,7 @@ function renderGlurSales(){
     <div class="card">${!glurSalesReady&&!glurSalesError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติการขาย')}</div>
     <div class="small muted">แสดง ${glurSaleHistoryLimit} รายการล่าสุด · ข้อมูลยอดขายจาก Supabase · หากไม่มีชื่อเมนูในประวัติ แสดงเฉพาะยอดรวมจากบิล</div>
   `);
+  glurRenderCustomCocktail();
   document.querySelectorAll('[data-glur-adjust]').forEach(btn=>btn.onclick=()=>{
     glurEditingSaleId=glurEditingSaleId===btn.dataset.glurAdjust?null:btn.dataset.glurAdjust;
     renderGlurSales();
