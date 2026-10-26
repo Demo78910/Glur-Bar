@@ -240,6 +240,40 @@ body{background:#100f0f;font-size:14px;line-height:1.55}
 @media(max-width:600px){.wrap{padding:18px 12px 115px!important}.top{padding:11px 15px}.glur-account{padding:8px 12px}.page-title{font-size:23px}.dashboard-head{align-items:flex-start}.dashboard-head .btn{flex-shrink:0}.dashboard-stats{gap:9px}.dashboard-stats .card{padding:14px;min-height:112px}.dashboard-stats .metric{font-size:clamp(19px,5vw,25px)}.dashboard-main{gap:12px;margin-top:14px}.dashboard-panel{padding:15px;min-height:0}.dashboard-quick .btn{padding:11px;font-size:12px;min-height:54px}.dashboard-notice{font-size:11px}}
 @media(max-width:360px){.dashboard-stats{grid-template-columns:1fr 1fr}.dashboard-quick{grid-template-columns:1fr 1fr}}
 
+
+/* GLUR BAR — redesigned employee permission dialog */
+.glur-perm-dialog{width:min(1120px,calc(100vw - 24px));max-width:1120px;max-height:min(92vh,1000px);padding:0;border:1px solid #554936;border-radius:20px;background:#121212;color:#f6f0e7;box-shadow:0 28px 90px #0009;overflow:auto}
+.glur-perm-dialog::backdrop{background:#000b;backdrop-filter:blur(3px)}
+.glur-perm-dialog *{box-sizing:border-box}
+.glur-perm-shell{padding:24px}
+.glur-perm-heading,.glur-perm-person,.glur-perm-footer{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.glur-perm-heading h2{margin:0;color:#f3c66e;font-size:23px}.glur-perm-heading p,.glur-perm-presets p{margin:5px 0 0;color:#b6ada0;font-size:13px}
+.glur-perm-close{background:none;border:0;color:#eee;font-size:32px;padding:0 8px}
+.glur-perm-person{justify-content:flex-start;flex-wrap:wrap;background:#1d1c1a;border:1px solid #403a30;border-radius:14px;padding:15px;margin:20px 0}
+.glur-perm-avatar{display:grid;place-items:center;width:50px;height:50px;flex-shrink:0;border:1px solid #bd934a;border-radius:50%;color:#efbf63;font-size:30px}
+.glur-perm-identity{display:flex;flex:1;min-width:120px;flex-direction:column}.glur-perm-identity strong{font-size:19px}.glur-perm-identity small{color:#aaa}
+.glur-perm-role{border:1px solid #bb944e;border-radius:24px;padding:6px 13px;color:#f1c879;font-size:12px}
+.glur-perm-sectiontitle{font-weight:700;margin-bottom:10px}.glur-perm-presetbuttons{display:flex;gap:8px;flex-wrap:wrap}
+.glur-perm-presetbuttons button{flex:1;min-width:100px;background:#242322;color:#eee;border:1px solid #49443b;border-radius:10px;padding:12px 10px;font-weight:700}
+.glur-perm-presetbuttons button.active,.glur-perm-presetbuttons button:hover{background:#e5b75e;color:#191713;border-color:#e5b75e}
+.glur-perm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:22px}
+.glur-perm-group{background:#1d1d1d;border:1px solid #423c32;border-radius:14px;overflow:hidden}
+.glur-perm-group header{display:flex;gap:12px;align-items:center;padding:14px 16px;background:#252321}
+.glur-perm-group header strong,.glur-perm-group header small{display:block}.glur-perm-group header small{color:#a9a299;font-size:12px;margin-top:2px}
+.glur-perm-icon{display:grid;place-items:center;flex-shrink:0;width:38px;height:38px;border-radius:10px;background:#4a3820;color:#eec26d;font-size:23px}
+.glur-perm-row{display:flex;position:relative;align-items:center;gap:12px;justify-content:space-between;padding:11px 16px;border-top:1px solid #37332f;cursor:pointer}
+.glur-perm-rowtext{flex:1;min-width:0}.glur-perm-rowtext strong,.glur-perm-rowtext small{display:block}.glur-perm-rowtext strong{font-size:14px}.glur-perm-rowtext small{font-size:11px;color:#a6a099;margin-top:2px}
+.glur-perm-toggle{position:absolute;right:16px;width:48px;height:27px;opacity:0;cursor:pointer;z-index:1}
+.glur-perm-switch{width:48px;height:27px;flex-shrink:0;border-radius:30px;background:#414147;position:relative;transition:background .2s}
+.glur-perm-switch:after{content:'';position:absolute;width:21px;height:21px;top:3px;left:3px;background:#f9f9fa;border-radius:50%;transition:transform .2s}
+.glur-perm-toggle:checked+.glur-perm-switch{background:#e9b956}.glur-perm-toggle:checked+.glur-perm-switch:after{transform:translateX(21px)}
+.glur-perm-toggle:focus-visible+.glur-perm-switch{outline:3px solid #fff;outline-offset:3px}
+.glur-perm-footer{margin-top:20px;border-top:1px solid #413b33;padding-top:18px;flex-wrap:wrap}.glur-perm-footer>span{font-size:12px;color:#b6a994;flex:1;min-width:180px}.glur-perm-footer>div{display:flex;gap:10px}
+.glur-perm-footer button{padding:12px 18px;border-radius:10px;border:1px solid #d5a74d;background:transparent;color:#f5e6c9;font-weight:700}
+.glur-perm-footer #glurPermissionSave{background:#e9ba60;color:#21190f;min-width:145px}
+.glur-perm-footer button:disabled{opacity:.55;cursor:wait}
+@media(max-width:680px){.glur-perm-shell{padding:15px}.glur-perm-grid{grid-template-columns:1fr}.glur-perm-heading h2{font-size:19px}.glur-perm-dialog{max-height:94vh}.glur-perm-footer>div{width:100%}.glur-perm-footer button{flex:1}}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
@@ -1041,22 +1075,52 @@ async function glurLoadMyPermissions(){
  glurShowRoleNav();
 }
 function glurCanDelegate(){return glurAdjustRole==='owner'||(glurAdjustRole==='manager'&&glurMyPermissions.employees_permissions===true)}
+const GLUR_PERMISSION_GROUPS=[
+ {title:'สต๊อกสินค้า',icon:'▣',desc:'จัดการวัตถุดิบและสินค้าคงเหลือ',keys:['stock_view','stock_create','stock_edit','stock_delete','stock_waste']},
+ {title:'สูตรเครื่องดื่ม',icon:'♧',desc:'จัดการสูตรและมาตรฐานการชง',keys:['recipes_view','recipes_create','recipes_edit','recipes_delete']},
+ {title:'ยอดขายและการเงิน',icon:'◈',desc:'บันทึกยอดขายและจัดการค่าใช้จ่าย',keys:['sales_create','sales_edit','sales_cancel','costs_view','expenses_manage']},
+ {title:'การบริหารจัดการ',icon:'⚙',desc:'ฟังก์ชันจัดการร้านและผู้ใช้งาน',keys:['receiving_manage','reports_view','closing_manage','audit_view','employees_edit','employees_permissions']}
+];
+const GLUR_PERMISSION_PRESETS={
+ manager:['stock_view','stock_create','stock_edit','stock_waste','recipes_view','recipes_create','recipes_edit','sales_create','sales_edit','sales_cancel','costs_view','expenses_manage','receiving_manage','reports_view','closing_manage','audit_view','employees_edit','employees_permissions'],
+ supervisor:['stock_view','stock_create','stock_waste','recipes_view','sales_create','receiving_manage','reports_view'],
+ staff:['stock_view','recipes_view','sales_create','receiving_manage']
+};
 async function glurEditMemberPermissions(member){
  if(!glurCanDelegate()||member.role==='owner'||(glurAdjustRole==='manager'&&member.role==='manager'))return;
  const {data,error}=await glurSupabase.rpc('glur_get_member_permissions',{p_shop_id:GLUR_SHOP_ID,p_target_user:member.user_id});
  if(error){toast('โหลดสิทธิ์ไม่สำเร็จ: '+error.message);return}
  const values=data||{};
- const dialog=document.createElement('dialog');dialog.style.cssText='max-width:540px;width:calc(100% - 24px);max-height:85vh;overflow:auto;border:1px solid #888;border-radius:12px;padding:18px;background:#181818;color:#fff';
- dialog.innerHTML='<form method="dialog"><h3>กำหนดสิทธิ์: '+esc(member.display_name||member.username||'พนักงาน')+'</h3><p class="small muted">สิทธิ์เหล่านี้บันทึกลง Supabase · Manager ไม่สามารถมอบสิทธิ์ที่ตนไม่มี</p><div class="stack">'+GLUR_PERMISSION_ITEMS.filter(([k])=>glurAdjustRole==='owner'||(k!=='employees_permissions'&&glurMyPermissions[k]===true)).map(([k,label])=>'<label style="display:flex;gap:10px;align-items:center;padding:5px 0"><input type="checkbox" data-perm="'+k+'" '+(values[k]===true?'checked':'')+'><span>'+esc(label)+'</span></label>').join('')+'</div><div class="actions"><button class="btn secondary" value="cancel">ยกเลิก</button><button class="btn" id="glurPermissionSave" type="button">บันทึกสิทธิ์</button></div></form>';
+ const permitted=GLUR_PERMISSION_ITEMS.filter(([k])=>glurAdjustRole==='owner'||(k!=='employees_permissions'&&glurMyPermissions[k]===true));
+ const permittedKeys=new Set(permitted.map(([k])=>k));
+ const labelMap=Object.fromEntries(GLUR_PERMISSION_ITEMS);
+ const dialog=document.createElement('dialog');dialog.className='glur-perm-dialog';
+ const groups=GLUR_PERMISSION_GROUPS.map(group=>{
+  const rows=group.keys.filter(k=>permittedKeys.has(k)).map(k=>`<label class="glur-perm-row"><span class="glur-perm-rowtext"><strong>${esc(labelMap[k])}</strong><small>${esc(({stock_view:'ตรวจสอบรายการและปริมาณคงเหลือ',stock_create:'เพิ่มรายการวัตถุดิบใหม่',stock_edit:'แก้ไขข้อมูลวัตถุดิบ',stock_delete:'ลบรายการวัตถุดิบ',stock_waste:'ปรับปริมาณและบันทึกของเสีย',recipes_view:'ดูสูตรเครื่องดื่มทั้งหมด',recipes_create:'สร้างสูตรเครื่องดื่มใหม่',recipes_edit:'แก้ไขสูตรที่มีอยู่',recipes_delete:'ลบสูตรเครื่องดื่ม',sales_create:'บันทึกการขายเครื่องดื่ม',sales_edit:'แก้ไขรายการขาย',sales_cancel:'ยกเลิกรายการขาย',costs_view:'ดูต้นทุนและกำไร',expenses_manage:'บันทึกและแก้ไขค่าใช้จ่าย',receiving_manage:'บันทึกการรับสินค้าเข้า',reports_view:'ดูรายงานร้าน',closing_manage:'ปิดยอดขายประจำวัน',audit_view:'ดูประวัติการทำรายการ',employees_edit:'แก้ไขข้อมูลพนักงาน',employees_permissions:'จัดการสิทธิ์พนักงาน'})[k]||'')}</small></span><input type="checkbox" class="glur-perm-toggle" data-perm="${k}" ${values[k]===true?'checked':''}><span class="glur-perm-switch" aria-hidden="true"></span></label>`).join('');
+  return rows?`<section class="glur-perm-group"><header><span class="glur-perm-icon">${group.icon}</span><span><strong>${group.title}</strong><small>${group.desc}</small></span></header><div>${rows}</div></section>`:'';
+ }).join('');
+ dialog.innerHTML=`<div class="glur-perm-shell"><header class="glur-perm-heading"><div><h2>⚙ กำหนดสิทธิ์พนักงาน</h2><p>เลือกสิทธิ์ที่ต้องการให้พนักงานแต่ละคน</p></div><button type="button" class="glur-perm-close" aria-label="ปิด">×</button></header><div class="glur-perm-person"><div class="glur-perm-avatar">♙</div><div class="glur-perm-identity"><strong>${esc(member.display_name||member.username||'พนักงาน')}</strong><small>${esc(member.username||'บัญชีพนักงาน')}</small></div><span class="glur-perm-role">${esc((member.role||'staff').toUpperCase())}</span></div><div class="glur-perm-presets"><div class="glur-perm-sectiontitle">ตั้งค่าสิทธิ์ด่วนตามตำแหน่ง</div><div class="glur-perm-presetbuttons"><button type="button" data-preset="manager">Manager</button><button type="button" data-preset="supervisor">Supervisor</button><button type="button" data-preset="staff">Staff</button><button type="button" data-preset="reset">คืนค่าเดิม</button></div><p>เลือกชุดสิทธิ์เริ่มต้นแล้วปรับแต่ละรายการได้เอง · ไม่เปลี่ยนตำแหน่งจริงของบัญชี</p></div><div class="glur-perm-grid">${groups}</div><footer class="glur-perm-footer"><span>🔒 บันทึกลง Supabase · Manager มอบสิทธิ์เกินกว่าที่ตนมีไม่ได้</span><div><button type="button" class="glur-perm-cancel">ยกเลิก</button><button type="button" id="glurPermissionSave">▣ บันทึกสิทธิ์</button></div></footer></div>`;
  document.body.appendChild(dialog);dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();
+ const boxes=[...dialog.querySelectorAll('[data-perm]')];
+ const initial=Object.fromEntries(boxes.map(el=>[el.dataset.perm,el.checked]));
+ dialog.querySelector('.glur-perm-close').onclick=()=>dialog.close();
+ dialog.querySelector('.glur-perm-cancel').onclick=()=>dialog.close();
+ dialog.querySelectorAll('[data-preset]').forEach(btn=>btn.onclick=()=>{
+  const preset=btn.dataset.preset;
+  boxes.forEach(el=>{el.checked=preset==='reset'?initial[el.dataset.perm]:GLUR_PERMISSION_PRESETS[preset].includes(el.dataset.perm)});
+  dialog.querySelectorAll('[data-preset]').forEach(b=>b.classList.toggle('active',b===btn));
+ });
  dialog.querySelector('#glurPermissionSave').onclick=async()=>{
-  const updates={};dialog.querySelectorAll('[data-perm]').forEach(el=>updates[el.dataset.perm]=el.checked);
-  const save=dialog.querySelector('#glurPermissionSave');save.disabled=true;
-  const {error}=await glurSupabase.rpc('glur_set_member_permissions',{p_shop_id:GLUR_SHOP_ID,p_target_user:member.user_id,p_permissions:updates});
-  if(error){toast('บันทึกสิทธิ์ไม่สำเร็จ: '+error.message);save.disabled=false;return}
-  dialog.close();toast('บันทึกสิทธิ์พนักงานเรียบร้อย');
+  const updates={};boxes.forEach(el=>updates[el.dataset.perm]=el.checked);
+  const save=dialog.querySelector('#glurPermissionSave');save.disabled=true;save.textContent='กำลังบันทึก...';
+  try{
+   const {error}=await glurSupabase.rpc('glur_set_member_permissions',{p_shop_id:GLUR_SHOP_ID,p_target_user:member.user_id,p_permissions:updates});
+   if(error)throw error;
+   dialog.close();toast('บันทึกสิทธิ์พนักงานเรียบร้อย');
+  }catch(e){toast('บันทึกสิทธิ์ไม่สำเร็จ: '+e.message);save.disabled=false;save.textContent='▣ บันทึกสิทธิ์'}
  };
 }
+
 let glurTeamMembers=[],glurTeamError='',glurTeamBusy=false,glurAuditRows=[],glurAuditError='',glurAuditNames={};
 function glurShowRoleNav(){
   document.querySelectorAll('#nav button[data-page="team"]').forEach(b=>b.classList.toggle('hidden',!glurCanManageTeam()));
