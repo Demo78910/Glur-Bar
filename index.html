@@ -281,6 +281,19 @@ body{background:#100f0f;font-size:14px;line-height:1.55}
 
 /* Stock list: compact readable cards rather than full-width rows */
 .glur-stock-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:12px;margin:12px 0 18px}.glur-stock-card{width:100%;min-width:0;text-align:left;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:11px;transition:border-color .15s,background .15s}.glur-stock-card:hover,.glur-stock-card:focus-visible{border-color:var(--gold);background:var(--panel2)}.glur-stock-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.glur-stock-card-name{font-weight:750;font-size:15px;line-height:1.4;overflow-wrap:anywhere}.glur-stock-card-category{font-size:12px;color:var(--muted);margin-top:3px}.glur-stock-card-bottom{display:flex;justify-content:space-between;align-items:end;gap:8px;border-top:1px solid var(--line);padding-top:10px}.glur-stock-card-qty{font-size:21px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}.glur-stock-card-qty small{font-size:12px;font-weight:500}.glur-stock-card-cost{font-size:12px;color:var(--muted);margin-top:5px}.glur-stock-state{font-size:12px;border-radius:20px;padding:4px 9px;white-space:nowrap;background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}.glur-stock-state.low{color:#f59a43;background:#f59a431c}.glur-stock-state.out{color:var(--red);background:#d83b321a}.glur-stock-open{font-size:12px;color:var(--gold);white-space:nowrap}@media(min-width:1300px){.glur-stock-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:650px){.glur-stock-cards{grid-template-columns:1fr;gap:9px}.glur-stock-card{padding:13px}}
+
+/* Mobile-first stock: compact one-tap list and usable recipe search */
+@media(max-width:700px){
+.glur-stock-summary{gap:6px;margin:8px 0}.glur-stock-stat{padding:9px 7px}.glur-stock-stat strong{font-size:19px}.glur-stock-stat small{font-size:10px;line-height:1.2;display:block}
+.glur-stock-cards{display:flex;flex-direction:column;gap:0;margin:8px 0 14px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+.glur-stock-card{border:0;border-radius:0;border-bottom:1px solid var(--line);padding:12px 10px;gap:5px;min-height:66px}.glur-stock-card:last-child{border-bottom:0}
+.glur-stock-card-head{align-items:center}.glur-stock-card-name{font-size:14px;line-height:1.3}.glur-stock-card-category{font-size:11px;margin-top:2px;max-width:72vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.glur-stock-card-bottom{border:0;padding:0;align-items:center}.glur-stock-card-qty{font-size:17px}.glur-stock-card-cost{font-size:11px;margin-top:2px}.glur-stock-open{font-size:11px}.glur-stock-state{font-size:10px;padding:3px 7px}
+.compact-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 42px 1fr 1fr;gap:5px}.compact-toolbar input{min-width:0;font-size:16px}.compact-toolbar .btn{font-size:11px;padding:9px 5px;white-space:normal;line-height:1.2}
+.chip-row{display:flex;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;gap:6px;padding-bottom:6px}.chip-row .chip{white-space:nowrap;flex-shrink:0}
+.glur-stock-status-filter{flex-wrap:nowrap;overflow-x:auto;gap:5px}.glur-stock-status-filter button{flex-shrink:0;font-size:12px;padding:6px 9px}
+.glur-picker{width:100vw;max-width:100vw;height:88dvh;max-height:88dvh;margin:auto 0 0;border-radius:18px 18px 0 0;padding:14px;position:fixed;inset:auto 0 0}.glur-picker input{font-size:16px}.glur-picker-list{max-height:calc(88dvh - 175px)}.glur-picker-list button{padding:14px 8px;min-height:56px}
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
