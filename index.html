@@ -771,20 +771,51 @@ render=function(){if(!currentUser)return;if(page==='stock'){renderStock();return
 
 // GLUR BAR cloud recipes: online data only, sales and receiving remain disabled.
 let cloudRecipes=[],recipeCloudError='',recipeCloudReady=false,recipeEditMode=false,recipeShowArchived=false;
-let glurCostCatalog=[];async function glurLoadCostCatalog(){const {data,error}=await glurSupabase.from('glur_cost_catalog').select('id,name,unit,purchase_price,package_size').eq('shop_id',GLUR_SHOP_ID).order('name');if(error){console.warn('Cost catalog:',error.message);return}glurCostCatalog=data||[]}
+let glurCostCatalog=[],glurCostHistory=[];
+async function glurLoadCostCatalog(){
+ const [{data,error},{data:history,herror}]=await Promise.all([
+ glurSupabase.from('glur_cost_catalog').select('id,name,unit,purchase_price,package_size').eq('shop_id',GLUR_SHOP_ID).order('name'),
+ glurSupabase.from('glur_cost_catalog_history').select('id,catalog_id,effective_date,purchase_price,package_size').eq('shop_id',GLUR_SHOP_ID).order('effective_date',{ascending:false})
+ ]);
+ if(error){console.warn('Cost catalog:',error.message);return}glurCostCatalog=data||[];
+ glurCostHistory=history||[];if(herror)console.warn('Cost history:',herror.message);
+}
 function glurCostMatch(name,unit){return glurCostCatalog.find(x=>x.name.trim().toLocaleLowerCase()===name.trim().toLocaleLowerCase()&&x.unit.trim().toLocaleLowerCase()===unit.trim().toLocaleLowerCase())}
-function glurNonstockCost(i){const c=glurCostMatch(String(i.name||''),String(i.unit||''));const price=c?num(c.purchase_price):num(i.purchase_price),size=c?num(c.package_size):num(i.package_size);return size>0?price/size*num(i.quantity):0}
+function glurEffectiveCost(c,date){
+ if(!c)return null;
+ const day=date||new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+ const records=glurCostHistory.filter(h=>h.catalog_id===c.id&&h.effective_date<=day).sort((a,b)=>b.effective_date.localeCompare(a.effective_date));
+ if(records.length)return records[0].package_size>0?records[0]:null;
+ if(glurCostHistory.some(h=>h.catalog_id===c.id))return null;
+ return num(c.package_size)>0?c:null;
+}
+function glurNonstockCost(i,date){const c=glurCostMatch(String(i.name||''),String(i.unit||''));const v=c?glurEffectiveCost(c,date):i;return v&&num(v.package_size)>0?num(v.purchase_price)/num(v.package_size)*num(i.quantity):0}
+async function glurAddCostVersion(c,price,size,date){
+ if(!c?.id)throw Error('ไม่พบวัตถุดิบในคลัง');
+ if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date))throw Error('กรุณาระบุวันที่มีผล');
+ if(price!==null&&(!Number.isFinite(price)||price<0||!Number.isFinite(size)||size<=0))throw Error('ราคาและขนาดบรรจุไม่ถูกต้อง');
+ const {error}=await glurSupabase.from('glur_cost_catalog_history').upsert({shop_id:GLUR_SHOP_ID,catalog_id:c.id,effective_date:date,purchase_price:price,package_size:price===null?null:size},{onConflict:'catalog_id,effective_date'});
+ if(error)throw error;await glurLoadCostCatalog();
+}
 function nsEditor(rowsId,buttonId,initial=[]){
  const rows=document.getElementById(rowsId);let editingNew=false;
  const pick=document.createElement('div');pick.className='card';pick.style.margin='8px 0';pick.innerHTML='<label>ค้นหาวัตถุดิบไม่ตัดสต๊อกที่บันทึกไว้</label><input data-ns-search placeholder="🔎 พิมพ์ชื่อเพื่อค้นหา..." autocomplete="off"><div data-ns-results style="max-height:230px;overflow:auto;margin-top:8px"></div><button type="button" class="btn secondary smallbtn" data-ns-new>＋ เพิ่มวัตถุดิบใหม่ในคลัง</button>';rows.before(pick);
  const search=pick.querySelector('[data-ns-search]'),results=pick.querySelector('[data-ns-results]');
+ const history=document.createElement('div');history.className='card';history.style.margin='8px 0';history.innerHTML='<strong>บันทึกราคาตามวันที่เริ่มใช้</strong><div class="small muted">เลือกรายการจากคลังด้านบน แล้วเพิ่มประวัติราคาได้โดยไม่เปลี่ยนยอดขายย้อนหลัง</div><select data-history-item style="width:100%;margin:8px 0"></select><div class="formgrid"><div class="field"><label>ราคาซื้อใหม่ (บาท)</label><input type="number" data-history-price min="0" step="any" placeholder="เว้นว่างหากยังไม่ทราบราคา"></div><div class="field"><label>ขนาดบรรจุ</label><input type="number" data-history-size min="0.000001" step="any" placeholder="เช่น 700"></div><div class="field"><label>เริ่มใช้วันที่</label><input type="date" data-history-date></div></div><button type="button" class="btn secondary smallbtn" data-history-save>บันทึกราคาและวันที่</button><div data-history-list class="small muted" style="margin-top:8px"></div>';pick.after(history);
+ const histSelect=history.querySelector('[data-history-item]');history.querySelector('[data-history-date]').value=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Bangkok'});
+ const drawHistory=()=>{histSelect.innerHTML=glurCostCatalog.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+' ('+esc(c.unit)+')</option>').join('');updateHistory()};
+ const updateHistory=()=>{const c=glurCostCatalog.find(x=>x.id===histSelect.value);history.querySelector('[data-history-list]').textContent=glurCostHistory.filter(h=>h.catalog_id===c?.id).map(h=>h.effective_date+' · '+(h.purchase_price===null?'ยังไม่ทราบราคา':money(h.purchase_price)+' / '+h.package_size+' '+c.unit)).join(' | ')||'ยังไม่มีประวัติราคา';};
+ histSelect.onchange=updateHistory;
+ history.querySelector('[data-history-save]').onclick=async()=>{try{const c=glurCostCatalog.find(x=>x.id===histSelect.value);const p=history.querySelector('[data-history-price]').value.trim();const size=Number(history.querySelector('[data-history-size]').value);await glurAddCostVersion(c,p===''?null:Number(p),size,history.querySelector('[data-history-date]').value);drawHistory();draw();toast('บันทึกประวัติราคาแล้ว')}catch(e){toast(e.message||String(e))}};
+ drawHistory();
+
  const add=(item,quantity=1,isNew=false)=>{
   const d=document.createElement('div');d.className='card';d.style.margin='8px 0';d.dataset.newItem=isNew?'1':'0';
-  d.innerHTML=`<div class="row between"><strong data-ns-title>${esc(item.name||'วัตถุดิบใหม่')}</strong><button type="button" class="btn danger smallbtn" data-ns-remove>ลบ</button></div><div class="formgrid"><div class="field"><label>ปริมาณที่ใช้ในสูตร</label><input data-ns-qty type="number" min="0.000001" step="any" required value="${esc(quantity)}"></div><div class="field"><label>หน่วย</label><input data-ns-unit maxlength="30" required value="${esc(item.unit||'ml')}" ${isNew?'':'readonly'}></div>${isNew?`<div class="field wide"><label>ชื่อวัตถุดิบใหม่</label><input data-ns-name maxlength="150" required placeholder="ชื่อวัตถุดิบ" value="${esc(item.name||'')}"></div><div class="field"><label>ราคาซื้อ (บาท) — เว้นว่างหากยังไม่ทราบ</label><input data-ns-price type="number" min="0" step="any" placeholder="ยังไม่ทราบ" value="${item.purchase_price??''}"></div><div class="field"><label>ขนาดบรรจุ</label><input data-ns-size type="number" min="0" step="any" placeholder="เช่น 700" value="${item.package_size??''}"></div>`:`<div class="field wide"><span class="small muted">ราคากลาง: ${num(item.package_size)>0?money(item.purchase_price)+' / '+num(item.package_size)+' '+esc(item.unit):'รอระบุราคา'} · เปลี่ยนราคาได้เมื่อเพิ่มรายการใหม่หรือจัดการคลังราคา</span></div>`}</div><div class="small muted" data-ns-cost></div>`;
+  d.innerHTML=`<div class="row between"><strong data-ns-title>${esc(item.name||'วัตถุดิบใหม่')}</strong><button type="button" class="btn danger smallbtn" data-ns-remove>ลบ</button></div><div class="formgrid"><div class="field"><label>ปริมาณที่ใช้ในสูตร</label><input data-ns-qty type="number" min="0.000001" step="any" required value="${esc(quantity)}"></div><div class="field"><label>หน่วย</label><input data-ns-unit maxlength="30" required value="${esc(item.unit||'ml')}" ${isNew?'':'readonly'}></div>${isNew?`<div class="field wide"><label>ชื่อวัตถุดิบใหม่</label><input data-ns-name maxlength="150" required placeholder="ชื่อวัตถุดิบ" value="${esc(item.name||'')}"></div><div class="field"><label>ราคาซื้อ (บาท) — เว้นว่างหากยังไม่ทราบ</label><input data-ns-price type="number" min="0" step="any" placeholder="ยังไม่ทราบ" value="${item.purchase_price??''}"></div><div class="field"><label>ขนาดบรรจุ</label><input data-ns-size type="number" min="0" step="any" placeholder="เช่น 700" value="${item.package_size??''}"></div>`:`<div class="field wide"><span class="small muted">ราคากลาง: ${glurEffectiveCost(item)?money(glurEffectiveCost(item).purchase_price)+' / '+num(glurEffectiveCost(item).package_size)+' '+esc(item.unit):'รอระบุราคา'} · เปลี่ยนราคาได้เมื่อเพิ่มรายการใหม่หรือจัดการคลังราคา</span></div>`}</div><div class="small muted" data-ns-cost></div>`;
   d.dataset.catalogId=item.id||'';d.dataset.name=item.name||'';
   const qty=d.querySelector('[data-ns-qty]');const update=()=>{const p=isNew?Number(d.querySelector('[data-ns-price]').value||0):num(item.purchase_price);const size=isNew?Number(d.querySelector('[data-ns-size]').value||0):num(item.package_size);d.querySelector('[data-ns-cost]').textContent=size>0?'ต้นทุน '+money(p/size*num(qty.value)):'รอระบุราคา / ไม่มีต้นทุน'};d.querySelectorAll('input').forEach(el=>el.addEventListener('input',update));d.querySelector('[data-ns-remove]').onclick=()=>d.remove();rows.appendChild(d);update();
  };
- const draw=()=>{const q=search.value.trim().toLocaleLowerCase();const matches=glurCostCatalog.filter(c=>!q||c.name.toLocaleLowerCase().includes(q)).slice(0,35);results.innerHTML=matches.map((c,i)=>`<button type="button" class="btn secondary smallbtn" style="display:block;width:100%;text-align:left;margin-bottom:5px" data-ns-choice="${i}">${esc(c.name)} · ${esc(c.unit)} · ${num(c.package_size)>0?money(c.purchase_price)+' / '+num(c.package_size):'รอระบุราคา'}</button>`).join('')||'<div class="small muted">ไม่พบวัตถุดิบ กดเพิ่มรายการใหม่ได้</div>';results.querySelectorAll('[data-ns-choice]').forEach(btn=>btn.onclick=()=>{add(matches[Number(btn.dataset.nsChoice)]);search.value='';draw()})};
+ const draw=()=>{const q=search.value.trim().toLocaleLowerCase();const matches=glurCostCatalog.filter(c=>!q||c.name.toLocaleLowerCase().includes(q)).slice(0,35);results.innerHTML=matches.map((c,i)=>`<button type="button" class="btn secondary smallbtn" style="display:block;width:100%;text-align:left;margin-bottom:5px" data-ns-choice="${i}">${esc(c.name)} · ${esc(c.unit)} · ${glurEffectiveCost(c)?money(glurEffectiveCost(c).purchase_price)+' / '+num(glurEffectiveCost(c).package_size):'รอระบุราคา'}</button>`).join('')||'<div class="small muted">ไม่พบวัตถุดิบ กดเพิ่มรายการใหม่ได้</div>';results.querySelectorAll('[data-ns-choice]').forEach(btn=>btn.onclick=()=>{add(matches[Number(btn.dataset.nsChoice)]);search.value='';draw()})};
  search.addEventListener('input',draw);pick.querySelector('[data-ns-new]').onclick=()=>add({name:search.value.trim(),unit:'ml',purchase_price:null,package_size:null},1,true);
  initial.forEach(i=>{const found=glurCostMatch(i.name,i.unit);add(found||i,i.quantity,!found)});draw();
  document.getElementById(buttonId).onclick=()=>{search.focus();pick.scrollIntoView({behavior:'smooth',block:'center'})};
