@@ -2116,7 +2116,7 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  const previousAuth=showAuthenticated;
  showAuthenticated=function(user){previousAuth(user);paint()};
  const previousSetPage=setPage;
- const blockedInTest=new Set(['employees','activity','audit','closing','closing-report','profit','reset','stock-count','stock-waste']);
+ const blockedInTest=new Set(['employees','activity','audit','reset']); // Finance, stock count and waste remain testable in TEST; privileged administration requires owner unlock.
  let testUnlocked=false;
  const unlockBtn=document.createElement('button');
  unlockBtn.type='button';unlockBtn.id='glurTestUnlock';
