@@ -1384,6 +1384,7 @@ glurLogout=async function(){glurExpenses=[];glurExpensesReady=false;await glurCl
 
 // GLUR BAR Pre-batch: recipes, atomic production, batches and finished-stock integration.
 let pbRecipes=[],pbBatches=[],pbReady=false,pbError='',pbBusy=false,pbSelected='',pbMode='list';
+let pbTestDrafts=[];
 async function pbLoad(){
  if(!currentUser)return;
  const [a,b,c,d]=await Promise.all([
@@ -1392,7 +1393,7 @@ async function pbLoad(){
   glurSupabase.from('glur_prebatch_batches').select('id,recipe_id,produced_qty,total_cost,produced_by,produced_at,notes').eq('shop_id',GLUR_SHOP_ID).order('produced_at',{ascending:false}).limit(100),glurSupabase.from('glur_prebatch_nonstock_ingredients').select('recipe_id,name,quantity,unit,purchase_price,package_size').eq('shop_id',GLUR_SHOP_ID)
  ]);
  pbError=[a.error,b.error,c.error,d.error].filter(Boolean).map(e=>e.message).join(' · ');
- pbReady=!pbError;pbRecipes=(a.data||[]).map(r=>({...r,ingredients:(b.data||[]).filter(i=>i.recipe_id===r.id),nonstock:(d.data||[]).filter(i=>i.recipe_id===r.id)}));pbBatches=c.data||[];
+ pbReady=!pbError;pbRecipes=(a.data||[]).map(r=>({...r,ingredients:(b.data||[]).filter(i=>i.recipe_id===r.id),nonstock:(d.data||[]).filter(i=>i.recipe_id===r.id)}));if(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID)pbRecipes=[...pbTestDrafts,...pbRecipes];pbBatches=c.data||[];
  if(currentUser&&page==='prebatch')pbRender();
 }
 function pbStock(id){return cloudStock.find(x=>x.id===id)}
@@ -1400,11 +1401,11 @@ function pbUnit(id){return pbStock(id)?.unit||''}
 function pbIngredientRows(r){return (r.ingredients||[]).map(i=>{const st=pbStock(i.stock_id);return `<div class="tableline"><span>${esc(st?.name||'ไม่พบวัตถุดิบ')} · ${num(i.quantity)} ${esc(st?.unit||'')}</span><strong>${money(num(i.quantity)*num(st?.cost_per_unit))}</strong></div>`}).join('')+(r.nonstock||[]).map(i=>`<div class="tableline"><span>${esc(i.name)} · ${num(i.quantity)} ${esc(i.unit)} (ไม่ตัดสต๊อก)</span><strong>${money(glurNonstockCost(i))}</strong></div>`).join('')}
 function pbRender(){
  if(!cloudReady){shell('Pre-batch','<div class="card">กำลังโหลดสต๊อกออนไลน์…</div>');return}
- if(pbMode==='create'){if(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID){pbMode='list'}else{pbRenderCreate();return}}
+ if(pbMode==='create'){pbRenderCreate();return}
  if(pbMode==='edit'){if(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID){pbMode='list';pbRender();return}if(!glurCanAdjust()){pbMode='list';pbRender();return}pbRenderEdit();return}
  if(pbMode==='produce'){if(!['owner','manager','supervisor'].includes(glurAdjustRole)){pbMode='list';pbRender();return}pbRenderProduce();return}
- const mayEdit=GLUR_SHOP_ID!==GLUR_TEST_SHOP_ID&&['owner','manager','supervisor'].includes(glurAdjustRole);
- shell('Pre-batch · GLUR BAR',`<div class="hint">${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'โหมด TEST: ดูสูตรและทดลองคำนวณต้นทุนได้เท่านั้น · ไม่บันทึกการผลิต ไม่ตัดสต๊อก':'สร้างสูตร → ผลิตจริง → ตัดวัตถุดิบต้นทาง → เพิ่ม Pre-batch เข้าสต๊อก → เลือกใช้ใน Recipes / Sales ได้ทันที · ทุกขั้นตอนบันทึกใน Supabase'}</div>
+ const mayEdit=['owner','manager','supervisor'].includes(glurAdjustRole);
+ shell('Pre-batch · GLUR BAR',`<div class="hint">${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'โหมด TEST: สร้างสูตรจำลองในหน้านี้ได้ (ไม่บันทึกฐานข้อมูล) · ไม่ผลิตจริง ไม่ตัดสต๊อก':'สร้างสูตร → ผลิตจริง → ตัดวัตถุดิบต้นทาง → เพิ่ม Pre-batch เข้าสต๊อก → เลือกใช้ใน Recipes / Sales ได้ทันที · ทุกขั้นตอนบันทึกใน Supabase'}</div>
  <div class="row between" style="margin-bottom:12px"><strong>สูตร Pre-batch (${pbRecipes.length})</strong><div class="actions"><button class="btn secondary smallbtn" id="pbRefresh">↻</button>${mayEdit?'<button class="btn smallbtn" id="pbCreate">＋ สร้างสูตร</button>':''}</div></div>
  ${pbError?`<div class="hint warn">${esc(pbError)} · กรุณาติดตั้งไฟล์ SQL ก่อน</div>`:''}
  <div class="card">${pbRecipes.map(r=>{const out=pbStock(r.output_stock_id);return `<div class="item"><div><div class="item-name">${esc(r.name)}</div><div class="small muted">ผลผลิต: ${esc(out?.name||'ไม่พบสต๊อกผลผลิต')} · คงเหลือ ${num(out?.quantity)} ${esc(out?.unit||'')} · ต้นทุน ${money(out?.cost_per_unit)}/${esc(out?.unit||'')}</div><div class="small muted">${r.ingredients.length} วัตถุดิบ</div></div><button class="btn secondary smallbtn" data-pb-produce="${r.id}">${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'รายละเอียด / จำลองต้นทุน':'รายละเอียด / ผลิต'}</button></div>`}).join('')||empty(pbReady?'ยังไม่มีสูตร Pre-batch':'กำลังโหลด…')}</div>
@@ -1416,7 +1417,7 @@ function pbRender(){
 function pbRenderCreate(){
  if(!['owner','manager','supervisor'].includes(glurAdjustRole)){pbMode='list';pbRender();return}
  const options=cloudStock.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} (${esc(s.unit)})</option>`).join('');
- shell('สร้างสูตร Pre-batch',`<button class="back-link" id="pbBack">‹ กลับ</button><div class="hint">ก่อนสร้างสูตร ให้เพิ่มวัตถุดิบผลผลิต เช่น Coconut Fat-Washed Vodka ในเมนูสต๊อก (ยอดเริ่มต้น 0) แล้วกลับมาเลือกเป็นสต๊อกผลผลิต · สูตรที่ผลิตแล้วไม่อนุญาตให้แก้ไขย้อนหลัง</div><div class="card"><form id="pbCreateForm" class="stack"><div class="field"><label>ชื่อสูตร Pre-batch</label><input name="name" maxlength="150" required placeholder="เช่น Coconut Fat-Washed Vodka"></div><div class="field"><label>สต๊อกผลผลิต (ต้องเป็นวัตถุดิบแยกต่างหาก)</label><select name="output" required><option value="">เลือกสต๊อกผลผลิต</option>${options}</select></div><div class="field"><label>หมายเหตุ / วิธีเตรียม</label><textarea name="notes" rows="3" placeholder="เช่น แช่แข็ง 8 ชั่วโมง แล้วกรอง"></textarea></div><div class="section-title">วัตถุดิบต่อหนึ่งสูตรมาตรฐาน</div><div id="pbRows"></div><button type="button" class="btn secondary" id="pbAdd">＋ เพิ่มวัตถุดิบ</button><div class="section-title">ส่วนผสมนอกสต๊อก · คิดต้นทุนตามราคาซื้อและขนาดบรรจุ</div><div id="pbNsRows"></div><button type="button" class="btn secondary" id="pbNsAdd">＋ เพิ่มส่วนผสมนอกสต๊อก</button><button type="submit" class="btn full">บันทึกสูตร Pre-batch</button></form></div>`);
+ shell('สร้างสูตร Pre-batch',`<button class="back-link" id="pbBack">‹ กลับ</button><div class="hint">${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST: สูตรที่สร้างจะอยู่ในหน้านี้ชั่วคราว ไม่บันทึกลงฐานข้อมูล · รีเฟรชแล้วสูตรจำลองจะหาย':'ก่อนสร้างสูตร ให้เพิ่มวัตถุดิบผลผลิต เช่น Coconut Fat-Washed Vodka ในเมนูสต๊อก (ยอดเริ่มต้น 0) แล้วกลับมาเลือกเป็นสต๊อกผลผลิต · สูตรที่ผลิตแล้วไม่อนุญาตให้แก้ไขย้อนหลัง'}</div><div class="card"><form id="pbCreateForm" class="stack"><div class="field"><label>ชื่อสูตร Pre-batch</label><input name="name" maxlength="150" required placeholder="เช่น Coconut Fat-Washed Vodka"></div><div class="field"><label>สต๊อกผลผลิต (ต้องเป็นวัตถุดิบแยกต่างหาก)</label><select name="output" required><option value="">เลือกสต๊อกผลผลิต</option>${options}</select></div><div class="field"><label>หมายเหตุ / วิธีเตรียม</label><textarea name="notes" rows="3" placeholder="เช่น แช่แข็ง 8 ชั่วโมง แล้วกรอง"></textarea></div><div class="section-title">วัตถุดิบต่อหนึ่งสูตรมาตรฐาน</div><div id="pbRows"></div><button type="button" class="btn secondary" id="pbAdd">＋ เพิ่มวัตถุดิบ</button><div class="section-title">ส่วนผสมนอกสต๊อก · คิดต้นทุนตามราคาซื้อและขนาดบรรจุ</div><div id="pbNsRows"></div><button type="button" class="btn secondary" id="pbNsAdd">＋ เพิ่มส่วนผสมนอกสต๊อก</button><button type="submit" class="btn full">บันทึกสูตร Pre-batch</button></form></div>`);
  document.getElementById('pbBack').onclick=()=>{pbMode='list';pbRender()};
  const rows=document.getElementById('pbRows');const getNonstock=nsEditor('pbNsRows','pbNsAdd');
  const add=()=>{const d=document.createElement('div');d.className='ingredient-row';d.innerHTML=`<select required><option value="">เลือกวัตถุดิบ</option>${options}</select><input type="number" min="0.000001" step="any" required placeholder="ปริมาณ"><button type="button" class="btn danger smallbtn">×</button>`;d.querySelector('button').onclick=()=>d.remove();rows.appendChild(d)};add();document.getElementById('pbAdd').onclick=add;
@@ -1424,6 +1425,7 @@ function pbRenderCreate(){
   e.preventDefault();if(pbBusy)return;const f=e.target,name=f.elements.name.value.trim(),output=f.elements.output.value;
   const items=[...rows.children].map(d=>({stock_id:d.children[0].value,quantity:Number(d.children[1].value)}));let extras;try{extras=getNonstock()}catch(err){toast(err.message);return}
   if(!name||!output||!items.length||items.some(i=>!i.stock_id||!Number.isFinite(i.quantity)||i.quantity<=0||i.stock_id===output)||new Set(items.map(i=>i.stock_id)).size!==items.length){toast('ตรวจสอบวัตถุดิบ ห้ามซ้ำหรือใช้สต๊อกผลผลิตเป็นส่วนผสม');return}
+  if(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID){const draft={id:'test-draft-'+id(),shop_id:GLUR_TEST_SHOP_ID,name,output_stock_id:output,notes:f.elements.notes.value.trim(),ingredients:items,nonstock:extras};pbTestDrafts.unshift(draft);pbMode='list';toast('เพิ่มสูตรจำลองแล้ว · ไม่บันทึกฐานข้อมูล');pbRender();return}
   pbBusy=true;const btn=f.querySelector('[type=submit]');btn.disabled=true;
   try{const {data:newId,error}=await glurSupabase.rpc('glur_save_prebatch_recipe',{p_shop_id:GLUR_SHOP_ID,p_name:name,p_output_stock_id:output,p_notes:f.elements.notes.value.trim(),p_ingredients:items});if(error)throw error;await nsSave('glur_prebatch_nonstock_ingredients',newId,extras);toast('สร้างสูตร Pre-batch แล้ว');pbMode='list';await pbLoad()}
   catch(err){toast('สร้างสูตรไม่ได้: '+(err.message||err))}finally{pbBusy=false;btn.disabled=false}
