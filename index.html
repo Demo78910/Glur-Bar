@@ -1717,15 +1717,56 @@ function glurCRExport(){
  for(const x of glurCRRows){const d={revenue:x.revenue,cogs:x.cogs,expenses:x.expenses,qty:x.drinks_sold};const dr=glurCRNum(d.revenue)-glurCRNum(x.revenue),dc=glurCRNum(d.cogs)-glurCRNum(x.cogs),de=glurCRNum(d.expenses)-glurCRNum(x.expenses);const changed=false;const row=[x.business_date,new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}),x.closer_display_name||'',x.closer_username||'',x.closed_by,x.revenue,x.cogs,x.gross_profit,x.expenses,x.profit_after_expenses,x.drinks_sold,d.revenue||0,d.cogs||0,d.expenses||0,dr,dc,de,'Snapshot รอบที่ '+(x.session_no||1),x.note];lines.push(row.map(glurCRCSVCell).join(','))}
  const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='GLUR_Closing_Report_'+glurCRFrom+'_'+glurCRTo+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+
+async function glurTestFinanceExport(kind){
+ if(GLUR_SHOP_ID!==GLUR_TEST_SHOP_ID)throw Error('TEST เท่านั้น');
+ const from=glurCRFrom,to=glurCRTo,cs=glurCRRows.slice();
+ if(!glurCRLoaded||!cs.length)throw Error('กรุณาโหลดประวัติปิดยอดก่อน');
+ const ids=cs.map(c=>c.id);
+ const [stockResult,saleResult]=await Promise.all([
+ glurSupabase.from('glur_test_closing_stock_snapshots').select('closing_id,stock_name,unit,quantity,cost_per_unit').eq('shop_id',GLUR_SHOP_ID).in('closing_id',ids).limit(10000),
+ glurSupabase.from('glur_sales').select('recipe_name,quantity_sold,total_amount,total_cost,sold_at').eq('shop_id',GLUR_SHOP_ID).gte('sold_at',from+'T00:00:00+07:00').lte('sold_at',glurCRShift(to,2)+'T00:00:00+07:00').order('sold_at').limit(10000)
+ ]);
+ if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
+ const stock=stockResult.data||[];
+ const sales=(saleResult.data||[]).map(s=>{const t=Date.parse(s.sold_at),c=cs.find(x=>x.period_start&&x.period_end&&t>=Date.parse(x.period_start)&&t<=Date.parse(x.period_end));return Object.assign({},s,{day:c?c.business_date:''})}).filter(x=>x.day);
+ if(kind==='xlsx'){
+  if(!window.XLSX)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';script.onload=resolve;script.onerror=()=>reject(Error('โหลด Excel library ไม่สำเร็จ'));document.head.appendChild(script)});
+  const book=XLSX.utils.book_new();
+  const tables=[
+   ['Closing',cs.map(c=>({date:c.business_date,session:c.session_no,revenue:Number(c.revenue),cogs:Number(c.cogs),expenses:Number(c.expenses),profit:Number(c.profit_after_expenses),drinks:Number(c.drinks_sold),closed_at:c.closed_at}))],
+   ['Sales',sales.map(x=>({date:x.day,menu:x.recipe_name,qty:Number(x.quantity_sold),revenue:Number(x.total_amount),cost:Number(x.total_cost)}))],
+   ['Stock',stock.map(x=>{const c=cs.find(y=>y.id===x.closing_id);return {date:c?.business_date||'',session:c?.session_no||'',item:x.stock_name,unit:x.unit,remaining:Number(x.quantity),unit_cost:Number(x.cost_per_unit)}})]
+  ];
+  for(const [name,rows] of tables)XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(rows.length?rows:[{info:'No data'}]),name);
+  XLSX.writeFile(book,'GLUR_TEST_History_'+from+'_'+to+'.xlsx');
+  return;
+ }
+ const day=document.getElementById('glurFinDay').value,dayClosings=cs.filter(c=>c.business_date===day);
+ if(!dayClosings.length)throw Error('ไม่มีรายการปิดยอดในวันที่เลือก');
+ const last=dayClosings.slice().sort((a,b)=>Number(b.session_no)-Number(a.session_no))[0],items=stock.filter(x=>x.closing_id===last.id);
+ if(!items.length)throw Error('ไม่มี Snapshot ของวันนี้ (ก่อนติดตั้งระบบจะไม่มีย้อนหลัง)');
+ const menus=new Map();for(const s of sales.filter(x=>x.day===day)){const n=s.recipe_name||'ไม่ระบุ';const v=menus.get(n)||{qty:0,revenue:0};v.qty+=Number(s.quantity_sold);v.revenue+=Number(s.total_amount);menus.set(n,v)}
+ const lines=[['รายการที่ขาย','header'],...Array.from(menus.entries()).map(([n,v])=>[n+' : '+v.qty+' แก้ว / ฿'+v.revenue.toFixed(2),'row']),['สต๊อกคงเหลือ ณ ปิดยอด','header'],...items.sort((a,b)=>a.stock_name.localeCompare(b.stock_name,'th')).map(x=>[x.stock_name+' : '+x.quantity+' '+x.unit,'row'])];
+ const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=490+lines.length*44;const ctx=canvas.getContext('2d');
+ ctx.fillStyle='#171717';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#ff913d';ctx.font='bold 48px sans-serif';ctx.fillText('GLUR BAR · TEST',48,75);
+ ctx.fillStyle='#ffffff';ctx.font='29px sans-serif';ctx.fillText('สรุปปิดยอด '+day,48,125);
+ const sum=(key)=>dayClosings.reduce((n,c)=>n+Number(c[key]||0),0);
+ ['ยอดขาย ฿'+sum('revenue').toFixed(2),'ขาย '+sum('drinks_sold')+' แก้ว','ต้นทุน ฿'+sum('cogs').toFixed(2),'ค่าใช้จ่าย ฿'+sum('expenses').toFixed(2),'กำไรหลังค่าใช้จ่าย ฿'+sum('profit_after_expenses').toFixed(2)].forEach((v,i)=>ctx.fillText(v,48,195+i*44));
+ let y=465;for(const [value,type] of lines){ctx.fillStyle=type==='header'?'#ff913d':'#ffffff';ctx.font=type==='header'?'bold 27px sans-serif':'24px sans-serif';ctx.fillText(value.length>75?value.slice(0,74)+'…':value,48,y);y+=44}
+ const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพไม่สำเร็จ');
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_TEST_Daily_'+day+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+
 function renderGlurClosingReport(){
  const defaults=glurCRDefaults(),from=glurCRFrom||defaults[0],to=glurCRTo||defaults[1];
  const live=new Map(); // Multi-session snapshots must not be compared to legacy daily 05:00 report
  const totals=glurCRRows.reduce((a,x)=>{a.revenue+=glurCRNum(x.revenue);a.cogs+=glurCRNum(x.cogs);a.expenses+=glurCRNum(x.expenses);a.qty+=glurCRNum(x.drinks_sold);return a},{revenue:0,cogs:0,expenses:0,qty:0});
  const rows=glurCRRows.map(x=>{const d={revenue:x.revenue,cogs:x.cogs,expenses:x.expenses,qty:x.drinks_sold};const deltaRevenue=glurCRNum(d.revenue)-glurCRNum(x.revenue),deltaCost=glurCRNum(d.cogs)-glurCRNum(x.cogs),deltaExpense=glurCRNum(d.expenses)-glurCRNum(x.expenses),deltaQty=glurCRNum(d.qty)-glurCRNum(x.drinks_sold);const changed=false;
  return `<div class="card"><div class="row between"><strong>${esc(x.business_date)} · รอบที่ ${esc(x.session_no||1)}</strong><span class="pill">บันทึกปิดยอด</span></div><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ${esc(x.closer_display_name||'ไม่บันทึกชื่อ ณ วันปิด')} · @${esc(x.closer_username||'ไม่ทราบไอดี')}</div><div class="tableline"><span>ยอดขาย ณ ปิดยอด</span><strong>${glurMoneySafe(x.revenue)}</strong></div><div class="tableline"><span>จำนวนแก้ว ณ ปิด</span><strong>${esc(x.drinks_sold)}</strong></div><div class="tableline"><span>กำไรหลังค่าใช้จ่าย ณ ปิด</span><strong>${glurMoneySafe(x.profit_after_expenses)}</strong></div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}</div>`}).join('');
- shell('รายงานปิดยอด · Closing Report',`<div class="hint">รายงาน Snapshot แยกตามรอบ (ตั้งแต่ติดตั้งระบบใหม่ใช้วันทำการ 03:00–02:59 และค่าใช้จ่ายตามเวลาบันทึกจริง) · ประวัติเดิมยังใช้รอบ 05:00 ตามที่เคยบันทึก</div><div class="card"><form id="glurCRForm" class="stack"><div class="formgrid"><div class="field"><label>จากวันที่</label><input type="date" name="from" value="${esc(from)}" required></div><div class="field"><label>ถึงวันที่</label><input type="date" name="to" max="${glurThaiBusinessToday()}" value="${esc(to)}" required></div></div><button class="btn full" type="submit" ${glurCRBusy?'disabled':''}>${glurCRBusy?'กำลังโหลด…':'↻ โหลดรายงาน'}</button></form>${glurCRError?`<div class="hint warn">${esc(glurCRError)}</div>`:''}</div>${glurCRLoaded?`<div class="grid">${metric('จำนวนรอบที่ปิด',String(glurCRRows.length))}${metric('ยอดขาย ณ ปิดยอด',glurMoneySafe(totals.revenue))}${metric('กำไรขั้นต้น ณ ปิดยอด',glurMoneySafe(totals.revenue-totals.cogs))}${metric('จำนวนแก้ว ณ ปิดยอด',String(totals.qty))}</div><button class="btn secondary full" id="glurCRCSV" ${!glurCRRows.length?'disabled':''}>↓ ส่งออก CSV</button><div class="section-title">รายละเอียดวันที่ปิดยอด</div>${rows||empty('ไม่มีวันที่ปิดยอดในช่วงนี้')}`:'<div class="hint">เลือกช่วงวันที่ แล้วกดโหลดรายงาน</div>'}<div class="hint">สรุปด้านบนรวมเฉพาะวันที่มีการปิดยอดแล้ว · ผู้ปิดแสดงเป็นรหัสบัญชีเพื่อไม่เดาชื่อจากข้อมูลที่ไม่ยืนยัน</div>`);
+ shell('รายงานปิดยอด · Closing Report',`<div class="hint">รายงาน Snapshot แยกตามรอบ (ตั้งแต่ติดตั้งระบบใหม่ใช้วันทำการ 03:00–02:59 และค่าใช้จ่ายตามเวลาบันทึกจริง) · ประวัติเดิมยังใช้รอบ 05:00 ตามที่เคยบันทึก</div><div class="card"><form id="glurCRForm" class="stack"><div class="formgrid"><div class="field"><label>จากวันที่</label><input type="date" name="from" value="${esc(from)}" required></div><div class="field"><label>ถึงวันที่</label><input type="date" name="to" max="${glurThaiBusinessToday()}" value="${esc(to)}" required></div></div><button class="btn full" type="submit" ${glurCRBusy?'disabled':''}>${glurCRBusy?'กำลังโหลด…':'↻ โหลดรายงาน'}</button></form>${glurCRError?`<div class="hint warn">${esc(glurCRError)}</div>`:''}</div>${glurCRLoaded?`<div class="grid">${metric('จำนวนรอบที่ปิด',String(glurCRRows.length))}${metric('ยอดขาย ณ ปิดยอด',glurMoneySafe(totals.revenue))}${metric('กำไรขั้นต้น ณ ปิดยอด',glurMoneySafe(totals.revenue-totals.cogs))}${metric('จำนวนแก้ว ณ ปิดยอด',String(totals.qty))}</div><button class="btn secondary full" id="glurCRCSV" ${!glurCRRows.length?'disabled':''}>↓ ส่งออก CSV</button>${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?`<div class="card"><strong>ส่งออกรายงาน TEST</strong><div class="hint">Excel สะสมตามช่วงวันที่ · PNG วันเดียว พร้อมสต๊อก Snapshot</div><button class="btn secondary full" id="glurFinExcel">Excel (.xlsx)</button><label>วันที่สำหรับภาพ</label><input type="date" id="glurFinDay" value="${esc(to)}" min="${esc(from)}" max="${esc(to)}"><button class="btn secondary full" id="glurFinImage">ภาพ (.png)</button></div>`:""}<div class="section-title">รายละเอียดวันที่ปิดยอด</div>${rows||empty('ไม่มีวันที่ปิดยอดในช่วงนี้')}`:'<div class="hint">เลือกช่วงวันที่ แล้วกดโหลดรายงาน</div>'}<div class="hint">สรุปด้านบนรวมเฉพาะวันที่มีการปิดยอดแล้ว · ผู้ปิดแสดงเป็นรหัสบัญชีเพื่อไม่เดาชื่อจากข้อมูลที่ไม่ยืนยัน</div>`);
  document.getElementById('glurCRForm').onsubmit=e=>{e.preventDefault();glurCRLoad(e.target.elements.from.value,e.target.elements.to.value)};
- const b=document.getElementById('glurCRCSV');if(b)b.onclick=glurCRExport;
+ const b=document.getElementById('glurCRCSV');if(b)b.onclick=glurCRExport;for(const [id,kind] of [['glurFinExcel','xlsx'],['glurFinImage','png']]){const el=document.getElementById(id);if(el)el.onclick=async()=>{el.disabled=true;try{await glurTestFinanceExport(kind)}catch(e){toast('ส่งออกไม่สำเร็จ: '+(e.message||e))}finally{el.disabled=false}}}
 }
 const glurCRPriorRender=render;
 render=function(){if(!currentUser)return;if(page==='closing-report'){renderGlurClosingReport();return}glurCRPriorRender()};
