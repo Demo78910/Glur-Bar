@@ -1730,27 +1730,44 @@ async function glurTestFinanceExport(kind){
  if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
  const stock=stockResult.data||[];
  const sales=(saleResult.data||[]).map(s=>{const t=Date.parse(s.sold_at),c=cs.find(x=>x.period_start&&x.period_end&&t>=Date.parse(x.period_start)&&t<=Date.parse(x.period_end));return Object.assign({},s,{day:c?c.business_date:''})}).filter(x=>x.day);
+
  if(kind==='xlsx'){
-  if(!window.XLSX)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';script.onload=resolve;script.onerror=()=>reject(Error('โหลด Excel library ไม่สำเร็จ'));document.head.appendChild(script)});
-  const book=XLSX.utils.book_new();
-  const total=key=>cs.reduce((n,c)=>n+Number(c[key]||0),0);
-  const summary=[{'หัวข้อ':'ร้าน','ข้อมูล':'GLUR BAR — TEST'},{'หัวข้อ':'ช่วงวันที่','ข้อมูล':from+' ถึง '+to},{'หัวข้อ':'จำนวนวันที่ปิดยอด','ข้อมูล':new Set(cs.map(c=>c.business_date)).size},{'หัวข้อ':'จำนวนแก้ว','ข้อมูล':total('drinks_sold')},{'หัวข้อ':'ยอดขายรวม (บาท)','ข้อมูล':total('revenue')},{'หัวข้อ':'ต้นทุนขาย (บาท)','ข้อมูล':total('cogs')},{'หัวข้อ':'ค่าใช้จ่าย (บาท)','ข้อมูล':total('expenses')},{'หัวข้อ':'กำไรหลังค่าใช้จ่าย (บาท)','ข้อมูล':total('profit_after_expenses')}];
-  const menuTotals=new Map();for(const x of sales){const name=x.recipe_name||'ไม่ระบุเมนู',v=menuTotals.get(name)||{qty:0,revenue:0,cost:0};v.qty+=Number(x.quantity_sold)||0;v.revenue+=Number(x.total_amount)||0;v.cost+=Number(x.total_cost)||0;menuTotals.set(name,v)}
-  const tables=[
-   ['ภาพรวม',summary],
-   ['ปิดยอดรายวัน',cs.slice().sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>({'วันที่':c.business_date,'รอบ':Number(c.session_no),'จำนวนแก้ว':Number(c.drinks_sold),'ยอดขาย (บาท)':Number(c.revenue),'ต้นทุนขาย (บาท)':Number(c.cogs),'ค่าใช้จ่าย (บาท)':Number(c.expenses),'กำไรหลังค่าใช้จ่าย (บาท)':Number(c.profit_after_expenses)}))],
-   ['ยอดขายแยกเมนู',Array.from(menuTotals,([name,v])=>({'เมนู':name,'จำนวนแก้ว':v.qty,'ยอดขาย (บาท)':v.revenue,'ต้นทุนขาย (บาท)':v.cost,'กำไรขั้นต้น (บาท)':v.revenue-v.cost}))],
-   ['รายการขายทั้งหมด',sales.map(x=>({'วันที่':x.day,'เมนู':x.recipe_name,'จำนวนแก้ว':Number(x.quantity_sold),'ยอดขาย (บาท)':Number(x.total_amount),'ต้นทุนขาย (บาท)':Number(x.total_cost)}))],
-   ['สต๊อก ณ ปิดยอด',stock.map(x=>{const c=cs.find(y=>y.id===x.closing_id);return {'วันที่':c?.business_date||'','รอบ':c?.session_no||'','สินค้า':x.stock_name,'หน่วย':x.unit,'คงเหลือ':Number(x.quantity),'ต้นทุนต่อหน่วย (บาท)':Number(x.cost_per_unit)}})]
-  ];
-  for(const [name,rows] of tables){
-   const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{'ข้อมูล':'ไม่มีข้อมูล'}]);
-   const keys=Object.keys(rows[0]||{'ข้อมูล':''});ws['!cols']=keys.map(k=>({wch:Math.min(52,Math.max(18,k.length+5,...rows.slice(0,200).map(row=>String(row[k]??'').length+3)))}));
-   ws['!autofilter']={ref:ws['!ref']};ws['!freeze']={xSplit:0,ySplit:1};
-   for(const address of Object.keys(ws)){if(address[0]==='!')continue;const cell=ws[address];if(cell.t==='n')cell.z='#,##0.00';}
-   XLSX.utils.book_append_sheet(book,ws,name);
+  if(!window.ExcelJS)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';script.onload=resolve;script.onerror=()=>reject(Error('โหลดตัวสร้าง Excel ไม่สำเร็จ'));document.head.appendChild(script)});
+  if(!window.ExcelJS)throw Error('ไม่พบตัวสร้าง Excel');
+  const wb=new ExcelJS.Workbook();wb.creator='GLUR BAR TEST';wb.created=new Date();
+  const money=n=>Number(n||0);
+  const total=key=>cs.reduce((v,c)=>v+money(c[key]),0);
+  const menuTotals=new Map();
+  for(const x of sales){const name=x.recipe_name||'ไม่ระบุเมนู',v=menuTotals.get(name)||{qty:0,revenue:0,cost:0};v.qty+=money(x.quantity_sold);v.revenue+=money(x.total_amount);v.cost+=money(x.total_cost);menuTotals.set(name,v)}
+  const orange='FFF47B20',black='FF1D1D1D',cream='FFFFF0E5',white='FFFFFFFF';
+  const moneyFmt='#,##0.00 "฿"';
+  function sheet(name,headers,rows,widths,moneyCols=[]){
+   const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:5}]});
+   ws.columns=headers.map((h,i)=>({key:'c'+i,width:widths[i]||20}));
+   ws.mergeCells(1,1,1,headers.length);
+   const title=ws.getCell(1,1);title.value='GLUR BAR  |  รายงานสำหรับเจ้าของร้าน';title.fill={type:'pattern',pattern:'solid',fgColor:{argb:black}};title.font={name:'Arial',bold:true,size:19,color:{argb:white}};title.alignment={vertical:'middle'};ws.getRow(1).height=43;
+   ws.mergeCells(2,1,2,headers.length);const sub=ws.getCell(2,1);sub.value='โหมด TEST เท่านั้น · '+from+' ถึง '+to+' · ข้อมูลทดลอง ไม่ใช่ยอดร้านจริง';sub.fill={type:'pattern',pattern:'solid',fgColor:{argb:cream}};sub.font={name:'Arial',size:11,color:{argb:'FF78401D'}};ws.getRow(2).height=28;
+   const head=ws.getRow(5);headers.forEach((h,i)=>{const c=head.getCell(i+1);c.value=h;c.fill={type:'pattern',pattern:'solid',fgColor:{argb:orange}};c.font={bold:true,color:{argb:white},size:12};c.alignment={vertical:'middle',wrapText:true}});head.height=32;
+   rows.forEach((arr,idx)=>{const row=ws.addRow(arr);row.height=25;row.eachCell((c,i)=>{c.font={name:'Arial',size:11,color:{argb:black}};c.alignment={vertical:'middle',wrapText:true,horizontal:typeof c.value==='number'?'right':'left'};if(idx%2===0)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF7F1'}};if(moneyCols.includes(i))c.numFmt=moneyFmt;else if(typeof c.value==='number')c.numFmt='#,##0.##'})});
+   ws.autoFilter={from:{row:5,column:1},to:{row:Math.max(5,5+rows.length),column:headers.length}};
+   ws.pageSetup={fitToPage:true,fitToWidth:1,fitToHeight:0,orientation:'landscape'};
+   return ws;
   }
-  XLSX.writeFile(book,'GLUR_TEST_History_'+from+'_'+to+'.xlsx');
+  const daily=cs.slice().sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>[c.business_date,money(c.sale_transactions),money(c.drinks_sold),money(c.revenue),money(c.cogs),money(c.expenses),money(c.profit_after_expenses)]);
+  const overview=sheet('01 ภาพรวม',['วันที่ทำการ','จำนวนบิล','แก้วที่ขาย','ยอดขาย (บาท)','ต้นทุน (บาท)','ค่าใช้จ่าย (บาท)','กำไร (บาท)'],daily,[20,17,17,24,24,24,26],[4,5,6,7]);
+  const metrics=[['ยอดขายรวม',total('revenue')],['จำนวนแก้ว',total('drinks_sold')],['ต้นทุนวัตถุดิบ',total('cogs')],['กำไรขั้นต้น',total('revenue')-total('cogs')],['ค่าใช้จ่าย',total('expenses')],['กำไรหลังค่าใช้จ่าย',total('profit_after_expenses')]];
+  metrics.forEach(([label,value],i)=>{const row=i<3?3:4,col=(i%3)*2+1;const cell=overview.getCell(row,col);cell.value=label+' : '+(i===1?value.toLocaleString('th-TH')+' แก้ว':value.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2})+' ฿');cell.font={bold:true,size:12,color:{argb:black}};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:cream}}});
+  const menuRows=Array.from(menuTotals,([name,v])=>[name,v.qty,v.revenue,v.cost,v.revenue-v.cost]).sort((a,b)=>b[2]-a[2]);
+  sheet('02 ยอดขายแยกเมนู',['ชื่อเมนู','จำนวนแก้ว','ยอดขาย (บาท)','ต้นทุน (บาท)','กำไรขั้นต้น (บาท)'],menuRows,[40,18,25,25,28],[3,4,5]);
+  sheet('03 รายการขาย',['วันทำการ','ชื่อเมนู','จำนวนแก้ว','ยอดขาย (บาท)','ต้นทุน (บาท)'],sales.map(x=>[x.day,x.recipe_name,money(x.quantity_sold),money(x.total_amount),money(x.total_cost)]),[20,42,18,26,26],[4,5]);
+  const stockRows=stock.map(x=>{const c=cs.find(y=>y.id===x.closing_id);return[c?.business_date||'',c?.session_no||'',x.stock_name,x.unit,money(x.quantity),money(x.cost_per_unit)]}).sort((a,b)=>a[0].localeCompare(b[0])||a[2].localeCompare(b[2],'th'));
+  sheet('04 สต๊อกย้อนหลัง',['วันปิดยอด','รอบ','ชื่อสินค้า','หน่วย','คงเหลือ ณ ปิดยอด','ต้นทุนต่อหน่วย (บาท)'],stockRows,[20,12,48,14,28,30],[6]);
+  const last=cs.slice().sort((a,b)=>a.business_date.localeCompare(b.business_date)||Number(a.session_no)-Number(b.session_no)).at(-1);
+  const latest=stock.filter(x=>x.closing_id===last?.id).sort((a,b)=>a.stock_name.localeCompare(b.stock_name,'th'));
+  sheet('05 สต๊อกล่าสุด',['ชื่อสินค้า','หน่วย','คงเหลือ ณ '+(last?.business_date||to),'ต้นทุนต่อหน่วย (บาท)'],latest.map(x=>[x.stock_name,x.unit,money(x.quantity),money(x.cost_per_unit)]),[48,16,31,31],[4]);
+  const buffer=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_TEST_Owner_Report_'+from+'_'+to+'.xlsx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
   return;
  }
  const selectedDay=document.getElementById('glurFinDay')?.value;const day=cs.some(c=>c.business_date===selectedDay)?selectedDay:cs.map(c=>c.business_date).sort().at(-1);const dayClosings=cs.filter(c=>c.business_date===day);
