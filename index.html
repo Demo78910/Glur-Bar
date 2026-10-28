@@ -1758,15 +1758,33 @@ async function glurTestFinanceExport(kind){
  const last=dayClosings.slice().sort((a,b)=>Number(b.session_no)-Number(a.session_no))[0],items=stock.filter(x=>x.closing_id===last.id);
  if(!items.length)throw Error('ไม่มี Snapshot ของวันนี้ (ก่อนติดตั้งระบบจะไม่มีย้อนหลัง)');
  const menus=new Map();for(const s of sales.filter(x=>x.day===day)){const n=s.recipe_name||'ไม่ระบุ';const v=menus.get(n)||{qty:0,revenue:0};v.qty+=Number(s.quantity_sold);v.revenue+=Number(s.total_amount);menus.set(n,v)}
- const lines=[['รายการที่ขาย','header'],...Array.from(menus.entries()).map(([n,v])=>[n+' : '+v.qty+' แก้ว / ฿'+v.revenue.toFixed(2),'row']),['สต๊อกคงเหลือ ณ ปิดยอด','header'],...items.sort((a,b)=>a.stock_name.localeCompare(b.stock_name,'th')).map(x=>[x.stock_name+' : '+x.quantity+' '+x.unit,'row'])];
- const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=490+lines.length*44;const ctx=canvas.getContext('2d');
- ctx.fillStyle='#171717';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#ff913d';ctx.font='bold 48px sans-serif';ctx.fillText('GLUR BAR · TEST',48,75);
- ctx.fillStyle='#ffffff';ctx.font='29px sans-serif';ctx.fillText('สรุปปิดยอด '+day,48,125);
+
+ const sortedItems=items.slice().sort((a,b)=>a.stock_name.localeCompare(b.stock_name,'th'));
+ const menuLines=Array.from(menus.entries()).sort((a,b)=>b[1].qty-a[1].qty);
+ const canvas=document.createElement('canvas');canvas.width=1080;
+ const rowHeight=46,menuTop=475,stockTop=menuTop+85+menuLines.length*rowHeight;
+ canvas.height=stockTop+110+sortedItems.length*rowHeight+100;
+ const ctx=canvas.getContext('2d');
+ ctx.fillStyle='#171717';ctx.fillRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle='#ff913d';ctx.font='bold 52px sans-serif';ctx.fillText('GLUR BAR · TEST',50,82);
+ ctx.fillStyle='#ffffff';ctx.font='bold 31px sans-serif';ctx.fillText('รายงานปิดยอด '+day,50,137);
+ ctx.fillStyle='#bbbbbb';ctx.font='23px sans-serif';ctx.fillText('รอบปิดยอด '+dayClosings.length+' รอบ · สต๊อก ณ รอบล่าสุด '+sortedItems.length+' รายการ',50,181);
+ ctx.fillStyle='#242424';ctx.fillRect(42,210,996,214);
  const sum=(key)=>dayClosings.reduce((n,c)=>n+Number(c[key]||0),0);
- ['ยอดขาย ฿'+sum('revenue').toFixed(2),'ขาย '+sum('drinks_sold')+' แก้ว','ต้นทุน ฿'+sum('cogs').toFixed(2),'ค่าใช้จ่าย ฿'+sum('expenses').toFixed(2),'กำไรหลังค่าใช้จ่าย ฿'+sum('profit_after_expenses').toFixed(2)].forEach((v,i)=>ctx.fillText(v,48,195+i*44));
- let y=465;for(const [value,type] of lines){ctx.fillStyle=type==='header'?'#ff913d':'#ffffff';ctx.font=type==='header'?'bold 27px sans-serif':'24px sans-serif';ctx.fillText(value.length>75?value.slice(0,74)+'…':value,48,y);y+=44}
+ const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+ const stats=[['ยอดขาย','฿'+fmt(sum('revenue'))],['ขายทั้งหมด',fmt(sum('drinks_sold')).replace('.00','')+' แก้ว'],['ต้นทุนขาย','฿'+fmt(sum('cogs'))],['ค่าใช้จ่าย','฿'+fmt(sum('expenses'))],['กำไรหลังค่าใช้จ่าย','฿'+fmt(sum('profit_after_expenses'))]];
+ stats.forEach(([label,value],i)=>{const col=i%2,row=Math.floor(i/2),x=65+col*490,y=248+row*62;ctx.fillStyle='#bbbbbb';ctx.font='23px sans-serif';ctx.fillText(label,x,y);ctx.fillStyle=i===4?'#ff913d':'#ffffff';ctx.font='bold 27px sans-serif';ctx.fillText(value,x+210,y)});
+ ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('รายการที่ขายทั้งหมด',50,menuTop);
+ let y=menuTop+52;ctx.font='23px sans-serif';
+ if(!menuLines.length){ctx.fillStyle='#bbbbbb';ctx.fillText('ไม่มีรายการขายในรอบนี้',55,y);y+=rowHeight}
+ for(const [name,v] of menuLines){ctx.fillStyle='#ffffff';ctx.fillText(name,55,y,650);ctx.textAlign='right';ctx.fillText(v.qty+' แก้ว  /  ฿'+fmt(v.revenue),1020,y);ctx.textAlign='left';y+=rowHeight}
+ y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อกคงเหลือทั้งหมด ('+sortedItems.length+' รายการ)',50,y);
+ y+=58;for(let i=0;i<sortedItems.length;i++){const x=sortedItems[i];if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
+ ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,740);
+ ctx.textAlign='right';ctx.fillText(Number(x.quantity).toLocaleString('th-TH')+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
+ ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ข้อมูลสต๊อกเป็น Snapshot ณ เวลาปิดยอด · โหมด TEST',50,canvas.height-40);
  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพไม่สำเร็จ');
- const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_TEST_Daily_'+day+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_TEST_Daily_'+day+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
 
 function renderGlurClosingReport(){
