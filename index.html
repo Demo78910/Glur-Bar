@@ -1769,13 +1769,34 @@ async function glurLoadClosings(){
  finally{glurClosingBusy=false;if(page==='closing')renderGlurClosing()}
 }
 function renderGlurClosing(){
- const date=window.glurClosingDate||glurThaiBusinessToday();const allowed=['owner','manager','supervisor','staff'].includes(glurAdjustRole);
- shell('ปิดยอดประจำวัน · Daily Closing',`<div class="hint">วันทำการ: 03:00–02:59 (Asia/Bangkok) · ปิดยอดก่อนตี 3 ได้ · การขายหรือบันทึกค่าใช้จ่ายต่อหลังปิดยอดจะเข้ารอบถัดไป · Snapshot รอบเดิมไม่เปลี่ยน</div>
- ${allowed?`<div class="card"><form id="glurCloseForm" class="stack"><div class="field"><label>วันที่ทำการ</label><input name="businessDate" type="date" max="${glurThaiBusinessToday()}" value="${esc(date)}" required></div><div class="field"><label>บันทึกปิดกะ</label><textarea name="note" rows="2" maxlength="1000"></textarea></div><button class="btn full" type="submit" ${glurClosingBusy?'disabled':''}>ปิดยอดรอบปัจจุบัน</button></form></div>`:'<div class="hint">เฉพาะ Owner / Manager ที่ปิดยอดได้</div>'}
- <div class="row between"><strong>ประวัติการปิดยอด</strong><button id="glurClosingReload" class="btn secondary smallbtn">↻ รีเฟรช</button></div>
+ const date=window.glurClosingDate||glurThaiBusinessToday();
+ const allowed=glurAdjustRole==='owner'||glurMyPermissions.closing_manage===true;
+ const canSeeFinance=glurAdjustRole==='owner'||glurMyPermissions.costs_view===true;
+ const formatDate=v=>{const d=new Date(v+'T12:00:00+07:00');return Number.isNaN(d.getTime())?v:d.toLocaleDateString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric'})};
+ shell('ปิดยอดประจำวัน',`<style>
+ .closing-ui{display:grid;gap:14px}.closing-ui .card{margin:0;padding:16px;border-radius:18px}
+ .closing-ui .closing-intro{font-size:13px;line-height:1.6;color:var(--muted,#aaa);padding:0 2px}
+ .closing-ui .closing-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+ .closing-ui .closing-head strong{font-size:17px}
+ .closing-ui .closing-meta{font-size:12px;opacity:.78;line-height:1.5}
+ .closing-ui .closing-entry{padding:13px 0;border-bottom:1px solid #ffffff1b}
+ .closing-ui .closing-entry:last-child{border-bottom:0;padding-bottom:0}
+ .closing-ui .closing-entry:first-child{padding-top:0}
+ .closing-ui .closing-entry-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+ .closing-ui .closing-entry h3{margin:0 0 4px;font-size:16px}
+ .closing-ui .closing-entry details{margin-top:9px}
+ .closing-ui .closing-entry summary{cursor:pointer;font-size:13px;color:#e9b68e;padding:7px 0}
+ .closing-ui .closing-entry .tableline{padding:6px 0}
+ .closing-ui .closing-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}
+ .closing-ui .closing-actions .btn{width:auto;min-width:0}
+ .closing-ui .closing-date{font-size:13px;opacity:.8}
+ .closing-ui input,.closing-ui textarea{width:100%;max-width:100%;box-sizing:border-box}
+ </style><section class="closing-ui">
+ <div class="closing-intro">รอบวันทำการ 03:00–02:59 น. (เวลาไทย) · หากมีการขายหลังปิดยอด ระบบจะนับเข้ารอบถัดไป</div>
+ ${allowed?`<div class="card"><div class="closing-head"><strong>✓ ปิดยอดรอบนี้</strong><span class="closing-date">${esc(formatDate(date))}</span></div><form id="glurCloseForm" class="stack" style="margin-top:12px"><div class="field"><label>วันที่ทำการ</label><input name="businessDate" type="date" max="${glurThaiBusinessToday()}" value="${esc(date)}" required></div><div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><textarea name="note" rows="2" maxlength="1000" placeholder="เช่น ปิดกะตามปกติ"></textarea></div><button class="btn full" type="submit" ${glurClosingBusy?'disabled':''}>✓ ยืนยันปิดยอด</button></form><div class="closing-meta" style="margin-top:9px">ระบบเก็บยอด ณ เวลาปิดรอบ และไม่เปลี่ยนย้อนหลังอัตโนมัติ</div></div>`:'<div class="card">บัญชีนี้ไม่มีสิทธิ์ปิดยอด</div>'}
+ <div class="closing-actions"><strong>ประวัติการปิดยอด</strong><button id="glurClosingReload" class="btn secondary smallbtn" type="button">↻ รีเฟรช</button></div>
  ${glurClosingError?`<div class="hint warn">${esc(glurClosingError)}</div>`:''}
- <div class="card">${glurClosingRows.length?glurClosingRows.map(x=>`<div class="item" style="display:block"><strong>${esc(x.business_date)} · รอบที่ ${esc(x.session_no||1)}</strong><div class="small muted">ช่วง ${esc(x.period_start?new Date(x.period_start).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}):'—')} – ${esc(x.period_end?new Date(x.period_end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}):'—')}</div><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ${esc(x.closer_display_name||'ไม่บันทึกชื่อ ณ วันปิด')} · @${esc(x.closer_username||'ไม่ทราบไอดี')}</div>${(glurAdjustRole==='staff'?[['จำนวนแก้ว',x.drinks_sold]]:[['ยอดขาย',x.revenue],['ต้นทุนขาย',x.cogs],['กำไรขั้นต้น',x.gross_profit],['ค่าใช้จ่าย',x.expenses],['กำไรหลังหักค่าใช้จ่าย',x.profit_after_expenses]]).map(([n,v])=>`<div class="tableline"><span>${n}</span><strong>${glurMoneySafe(v)}</strong></div>`).join('')}<div class="small muted">${esc(x.drinks_sold)} แก้ว · ${esc(x.sale_transactions)} รายการ</div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}${glurAdjustRole==='owner'?`<button type="button" class="btn secondary smallbtn glur-delete-closing" data-closing-id="${esc(x.id)}" data-closing-date="${esc(x.business_date)}" style="margin-top:9px">ลบการปิดยอดวันนี้ (Owner)</button>`:''}</div>`).join(''):empty('ยังไม่มีประวัติการปิดยอด')}</div>
- <div class="hint">หากมีการแก้ไขยอดขายหรือค่าใช้จ่ายย้อนหลังหลังปิดยอด Snapshot จะไม่เปลี่ยนโดยอัตโนมัติ ให้เปรียบเทียบกับรายงาน Profit Analytics เพื่อหาความต่าง</div>`);
+ <div class="card">${glurClosingRows.length?glurClosingRows.map(x=>`<div class="closing-entry"><div class="closing-entry-top"><div><h3>${esc(formatDate(x.business_date))} · รอบ ${esc(x.session_no||1)}</h3><div class="closing-meta">${esc(x.drinks_sold)} แก้ว · ${esc(x.sale_transactions)} รายการ</div></div><span class="closing-meta">ปิดแล้ว</span></div><details><summary>ดูรายละเอียดรอบนี้</summary><div class="closing-meta">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}<br>โดย ${esc(x.closer_display_name||x.closer_username||'ไม่ระบุ')}</div>${(canSeeFinance?[['ยอดขาย',x.revenue],['ต้นทุนขาย',x.cogs],['กำไรขั้นต้น',x.gross_profit],['ค่าใช้จ่าย',x.expenses],['กำไรสุทธิ',x.profit_after_expenses]]:[]).map(([n,v])=>`<div class="tableline"><span>${n}</span><strong>${glurMoneySafe(v)}</strong></div>`).join('')}${x.note?`<div class="closing-meta">หมายเหตุ: ${esc(x.note)}</div>`:''}${glurAdjustRole==='owner'?`<button type="button" class="btn secondary smallbtn glur-delete-closing" data-closing-id="${esc(x.id)}" data-closing-date="${esc(x.business_date)}" style="margin-top:10px">ลบรายการนี้ (Owner)</button>`:''}</details></div>`).join(''):`<div style="text-align:center;padding:24px 8px;color:var(--muted,#aaa)">ยังไม่มีประวัติการปิดยอด<br><span style="font-size:13px">เมื่อปิดยอดครั้งแรก รายการจะปรากฏที่นี่</span></div>`}</div></section>`);
  document.querySelectorAll('.glur-delete-closing').forEach(btn=>btn.onclick=async()=>{
   if(glurAdjustRole!=='owner'){toast('เฉพาะ Owner เท่านั้น');return}
   const id=btn.dataset.closingId,day=btn.dataset.closingDate;
