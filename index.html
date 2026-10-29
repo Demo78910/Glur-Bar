@@ -2376,6 +2376,16 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
 @media(max-width:390px){#glurModeBar{padding:6px 8px!important}#glurModeLabel{font-size:12px!important;padding:5px 8px!important}}
 #glurModeBar .glur-mode-active{background:#ad4b19;color:white}
 @media(max-width:649px){#glurModeBar{padding:8px 12px;gap:6px;font-size:12px}#glurModeBar button{padding:7px 10px;font-size:12px}}
+/* Mobile header cleanup: preserve visible TEST/LIVE state while reducing clutter. */
+@media(max-width:649px){
+ #glurModeBar{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:6px 8px!important;padding:7px 12px!important;min-height:0!important;border-width:2px!important;align-items:center!important}
+ #glurModeLabel{min-height:32px!important;padding:5px 9px!important;font-size:12px!important;letter-spacing:0!important;max-width:100%!important;overflow:hidden!important;text-overflow:ellipsis!important}
+ #glurModeToggle{padding:7px 10px!important;font-size:12px!important;white-space:nowrap!important}
+ #glurTestUnlock{grid-column:1 / -1!important;justify-self:start!important;padding:5px 9px!important;font-size:11px!important;line-height:1.25!important}
+ .compact-toolbar{flex-wrap:wrap;gap:6px}
+ .compact-toolbar input{min-width:130px}
+ .compact-toolbar .btn{font-size:12px;padding:8px 10px}
+}
 </style>
 <script>
 // Two independent Supabase shop scopes. A full reload prevents cross-mode UI cache reuse.
