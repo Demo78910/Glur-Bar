@@ -947,7 +947,7 @@ function renderRecipeDetail(){
  };
  document.getElementById('recipeCancel').onclick=()=>{if(fresh)recipeDetailId=null;recipeEditMode=false;renderRecipes()};
  const rows=document.getElementById('cloudIngredientRows');
- function addRow(stockId='',qty=''){const div=document.createElement('div');div.className='ingredient-row glur-recipe-ingredient';div.innerHTML=`<select aria-label="วัตถุดิบ" required><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select><input aria-label="ปริมาณ" type="number" step="any" min="0.000001" required value="${esc(qty)}"><button type="button" class="btn danger smallbtn">×</button>`;div.querySelector('button').onclick=()=>div.remove();rows.appendChild(div)}
+ function addRow(stockId='',qty=''){const div=document.createElement('div');div.className='ingredient-row glur-recipe-ingredient';div.innerHTML=`<select aria-label="วัตถุดิบ" required><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select><div class="glur-ingredient-bottom"><input aria-label="ปริมาณ" placeholder="ปริมาณที่ใช้" type="number" step="any" min="0.000001" required value="${esc(qty)}"><button type="button" class="btn danger smallbtn" aria-label="ลบส่วนผสม">×</button></div>`;div.querySelector('button').onclick=()=>div.remove();rows.appendChild(div)}
  (r.ingredients||[]).forEach(i=>addRow(i.stock_id,i.quantity));if(!(r.ingredients||[]).length)addRow();
  document.getElementById('recipeAddIng').onclick=()=>addRow();const getNonstock=nsEditor('recipeNonstockRows','recipeAddNonstock',r.nonstock||[]);
  document.getElementById('recipeCloudForm').onsubmit=async e=>{
@@ -2432,6 +2432,13 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
 #recipeCloudForm .glur-recipe-ingredient input{width:100%;min-width:0;font-size:16px;min-height:50px}
 #recipeCloudForm .glur-recipe-ingredient button{min-width:0;min-height:50px;padding:8px}
 @media(max-width:600px){#recipeCloudForm .glur-recipe-ingredient{grid-template-columns:minmax(0,1fr) 52px;gap:10px}#recipeCloudForm .glur-recipe-ingredient select{grid-column:1/-1;min-height:52px}#recipeCloudForm .glur-recipe-ingredient input{grid-column:1;text-align:left;padding:12px}#recipeCloudForm .glur-recipe-ingredient button{grid-column:2}}
+
+/* Layout fix: independent block rows, no CSS grid auto-placement */
+#recipeCloudForm .glur-recipe-ingredient{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:12px!important;padding:14px!important;margin:14px 0!important;box-sizing:border-box!important;width:100%!important}
+#recipeCloudForm .glur-recipe-ingredient>select{display:block!important;flex:none!important;width:100%!important;max-width:100%!important;min-width:0!important;min-height:52px!important;grid-column:auto!important;box-sizing:border-box!important;font-size:16px!important;padding:12px!important}
+#recipeCloudForm .glur-recipe-ingredient>.glur-ingredient-bottom{display:flex!important;flex-direction:row!important;align-items:stretch!important;gap:10px!important;width:100%!important;min-width:0!important}
+#recipeCloudForm .glur-recipe-ingredient>.glur-ingredient-bottom>input{display:block!important;flex:1 1 auto!important;width:0!important;min-width:0!important;min-height:48px!important;box-sizing:border-box!important;padding:12px!important;font-size:16px!important}
+#recipeCloudForm .glur-recipe-ingredient>.glur-ingredient-bottom>button{display:block!important;flex:0 0 50px!important;width:50px!important;min-width:50px!important;min-height:48px!important;box-sizing:border-box!important;padding:8px!important}
 </style>
 <script>
 // Two independent Supabase shop scopes. A full reload prevents cross-mode UI cache reuse.
