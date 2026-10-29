@@ -947,7 +947,7 @@ function renderRecipeDetail(){
  };
  document.getElementById('recipeCancel').onclick=()=>{if(fresh)recipeDetailId=null;recipeEditMode=false;renderRecipes()};
  const rows=document.getElementById('cloudIngredientRows');
- function addRow(stockId='',qty=''){const div=document.createElement('div');div.className='ingredient-row';div.innerHTML=`<select aria-label="วัตถุดิบ" required><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select><input aria-label="ปริมาณ" type="number" step="any" min="0.000001" required value="${esc(qty)}"><button type="button" class="btn danger smallbtn">×</button>`;div.querySelector('button').onclick=()=>div.remove();rows.appendChild(div)}
+ function addRow(stockId='',qty=''){const div=document.createElement('div');div.className='ingredient-row glur-recipe-ingredient';div.innerHTML=`<select aria-label="วัตถุดิบ" required><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select><input aria-label="ปริมาณ" type="number" step="any" min="0.000001" required value="${esc(qty)}"><button type="button" class="btn danger smallbtn">×</button>`;div.querySelector('button').onclick=()=>div.remove();rows.appendChild(div)}
  (r.ingredients||[]).forEach(i=>addRow(i.stock_id,i.quantity));if(!(r.ingredients||[]).length)addRow();
  document.getElementById('recipeAddIng').onclick=()=>addRow();const getNonstock=nsEditor('recipeNonstockRows','recipeAddNonstock',r.nonstock||[]);
  document.getElementById('recipeCloudForm').onsubmit=async e=>{
@@ -2425,6 +2425,13 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
  .compact-toolbar input{min-width:130px}
  .compact-toolbar .btn{font-size:12px;padding:8px 10px}
 }
+
+/* Mobile recipe ingredients: full-width selector, amount and remove below */
+#recipeCloudForm .glur-recipe-ingredient{display:grid;grid-template-columns:minmax(0,1fr) 104px 44px;gap:10px;align-items:stretch;padding:12px;border:1px solid #49382f;border-radius:15px;background:#241c19;margin:12px 0;min-width:0}
+#recipeCloudForm .glur-recipe-ingredient select{width:100%;min-width:0;font-size:15px;line-height:1.5;white-space:normal;min-height:50px}
+#recipeCloudForm .glur-recipe-ingredient input{width:100%;min-width:0;font-size:16px;min-height:50px}
+#recipeCloudForm .glur-recipe-ingredient button{min-width:0;min-height:50px;padding:8px}
+@media(max-width:600px){#recipeCloudForm .glur-recipe-ingredient{grid-template-columns:minmax(0,1fr) 52px;gap:10px}#recipeCloudForm .glur-recipe-ingredient select{grid-column:1/-1;min-height:52px}#recipeCloudForm .glur-recipe-ingredient input{grid-column:1;text-align:left;padding:12px}#recipeCloudForm .glur-recipe-ingredient button{grid-column:2}}
 </style>
 <script>
 // Two independent Supabase shop scopes. A full reload prevents cross-mode UI cache reuse.
