@@ -970,7 +970,7 @@ function renderReceiving(){
   if(!cloudReady){shell('รับวัตถุดิบเข้า',`<div class="card">${cloudError?esc(cloudError):'กำลังโหลดสต๊อกออนไลน์…'}</div>`);return}
   const stockOptions=cloudStock.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} (${esc(s.unit)})</option>`).join('');
   const history=cloudReceipts.map(r=>{const s=cloudStock.find(x=>x.id===r.stock_id);const date=r.received_at?new Date(r.received_at).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}):'—';return `<div class="item"><div style="min-width:0"><div class="item-name">${esc(s?.name||'วัตถุดิบที่ลบไปแล้ว')}</div><div class="small muted">${esc(date)} · รับเข้า ${num(r.quantity).toLocaleString('th-TH')} ${esc(s?.unit||'หน่วย')}</div></div><strong>${money(r.total_cost)}</strong></div>`}).join('');
-  shell('รับวัตถุดิบเข้า · ออนไลน์',`<div class="hint">บันทึกผ่าน Supabase โดยเพิ่มจำนวนสต๊อก คำนวณต้นทุนเฉลี่ย และเก็บประวัติพร้อมกัน · สิทธิ์ Owner / Manager</div><div class="card"><div class="section-title" style="margin-top:0">รับของเข้า</div><form id="cloudReceiveForm" class="stack"><div class="field"><label>เลือกวัตถุดิบ</label><select name="stock_id" required>${stockOptions}</select></div><div id="receiveStockInfo" class="small muted"></div><div class="formgrid"><div class="field"><label>จำนวนรับเข้า (ตามหน่วยสต๊อก)</label><input name="quantity" type="number" min="0.000001" step="any" required placeholder="เช่น 1400"></div><div class="field"><label>ราคารวมที่ซื้อ (บาท)</label><input name="total_cost" type="number" min="0" step="any" required placeholder="เช่น 1498"></div></div><div id="receivePreview" class="hint">ระบุจำนวนและราคารวมเพื่อดูต้นทุนต่อหน่วย</div><button class="btn full" type="submit" ${!cloudStock.length||receivingBusy?'disabled':''}>${receivingBusy?'กำลังบันทึก…':'บันทึกรับเข้าออนไลน์'}</button></form></div><div class="row between"><div class="section-title">ประวัติรับเข้าล่าสุด</div><button id="refreshReceipts" class="btn secondary smallbtn">↻ รีเฟรช</button></div>${receiptsError?`<div class="hint warn">โหลดประวัติไม่ได้: ${esc(receiptsError)}</div>`:''}<div class="card">${!receiptsReady&&!receiptsError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติรับเข้า')}</div><div class="small muted">แสดงประวัติล่าสุด 100 รายการ · วันที่และเวลาอ้างอิงเวลาบันทึกบนเซิร์ฟเวอร์</div>`);
+  shell('รับวัตถุดิบเข้า · ออนไลน์',`<div class="hint">บันทึกผ่าน Supabase โดยเพิ่มจำนวนสต๊อก คำนวณต้นทุนเฉลี่ย และเก็บประวัติพร้อมกัน · สิทธิ์ Owner / Manager</div><div class="card"><div class="section-title" style="margin-top:0">รับของเข้า</div><form id="cloudReceiveForm" class="stack"><div class="field"><label>เลือกวัตถุดิบ</label><select name="stock_id" required>${stockOptions}</select></div><div id="receiveStockInfo" class="small muted"></div><div class="formgrid"><div class="field"><label>จำนวนรับเข้า (ตามหน่วยสต๊อก)</label><input name="quantity" type="number" min="0.000001" step="any" required placeholder="เช่น 1400"></div><div class="field"><label>ราคารวมที่ซื้อ (บาท)</label><input name="total_cost" type="number" min="0" step="any" required placeholder="เช่น 1498"></div></div><div id="receivePriceSuggestion" class="small muted">กำลังตรวจสอบราคาซื้อครั้งล่าสุด…</div><div id="receivePreview" class="hint">ระบุจำนวนและราคารวมเพื่อดูต้นทุนต่อหน่วย</div><button class="btn full" type="submit" ${!cloudStock.length||receivingBusy?'disabled':''}>${receivingBusy?'กำลังบันทึก…':'บันทึกรับเข้าออนไลน์'}</button></form></div><div class="row between"><div class="section-title">ประวัติรับเข้าล่าสุด</div><button id="refreshReceipts" class="btn secondary smallbtn">↻ รีเฟรช</button></div>${receiptsError?`<div class="hint warn">โหลดประวัติไม่ได้: ${esc(receiptsError)}</div>`:''}<div class="card">${!receiptsReady&&!receiptsError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติรับเข้า')}</div><div class="small muted">แสดงประวัติล่าสุด 100 รายการ · วันที่และเวลาอ้างอิงเวลาบันทึกบนเซิร์ฟเวอร์</div>`);
   document.getElementById('refreshReceipts').onclick=loadCloudReceipts;
   const form=document.getElementById('cloudReceiveForm');
   const update=()=>{
@@ -979,7 +979,40 @@ function renderReceiving(){
     const q=Number(form.elements.quantity.value),cost=Number(form.elements.total_cost.value);
     document.getElementById('receivePreview').textContent=s&&form.elements.quantity.value!==''&&form.elements.total_cost.value!==''&&q>0&&cost>=0?`ต้นทุนรับเข้าต่อ ${s.unit}: ${money(cost/q)} · คงเหลือหลังรับเข้า (ประมาณ): ${(num(s.quantity)+q).toLocaleString('th-TH')} ${s.unit}`:'ระบุจำนวนและราคารวมเพื่อดูต้นทุนต่อหน่วย';
   };
-  form.oninput=update;form.elements.stock_id.onchange=update;update();
+  // Suggest the last purchase unit price; never silently submit an unknown price.
+  let receiptSuggestionToken=0;
+  const suggestLastPurchase=async()=>{
+    const sid=form.elements.stock_id.value,token=++receiptSuggestionToken;
+    const stock=cloudStock.find(x=>x.id===sid);
+    const input=form.elements.total_cost;
+    input.value='';
+    input.placeholder='กรอกจำนวนรับเข้าก่อน เพื่อคำนวณราคาจากครั้งล่าสุด';
+    const local=cloudReceipts.find(x=>x.stock_id===sid&&Number(x.quantity)>0&&Number.isFinite(Number(x.total_cost)));
+    let last=local;
+    if(!last){
+      const {data,error}=await glurSupabase.from('glur_stock_receipts').select('quantity,total_cost,received_at')
+        .eq('shop_id',GLUR_SHOP_ID).eq('stock_id',sid).order('received_at',{ascending:false}).limit(1);
+      if(!error)last=data?.[0];
+    }
+    if(token!==receiptSuggestionToken||!form.isConnected||form.elements.stock_id.value!==sid)return;
+    const unit=last&&Number(last.quantity)>0?Number(last.total_cost)/Number(last.quantity):Number(stock?.cost_per_unit);
+    const known=Number.isFinite(unit)&&unit>0;
+    const priceInfo=document.getElementById('receivePriceSuggestion');
+    if(priceInfo)priceInfo.textContent=known?(last?'อ้างอิงราคาซื้อครั้งล่าสุด: ':'อ้างอิงต้นทุนปัจจุบัน: ')+money(unit)+'/'+stock.unit+' · แก้ไขราคารวมได้': 'ยังไม่มีราคาที่ทราบ กรุณากรอกราคารวมที่ซื้อ';
+    const apply=()=>{
+      if(!known||input.dataset.userEdited==='yes')return;
+      const q=Number(form.elements.quantity.value);
+      input.value=Number.isFinite(q)&&q>0?(q*unit).toFixed(2):'';
+      update();
+    };
+    form.elements.quantity.oninput=apply;
+    input.dataset.userEdited='no';
+    input.oninput=()=>{input.dataset.userEdited='yes';update()};
+    apply();
+  };
+  form.elements.stock_id.onchange=()=>{update();suggestLastPurchase()};
+  form.oninput=update;
+  suggestLastPurchase();update();
   form.onsubmit=async e=>{
     e.preventDefault();if(receivingBusy)return;
     const sid=form.elements.stock_id.value,q=Number(form.elements.quantity.value),cost=Number(form.elements.total_cost.value),s=cloudStock.find(x=>x.id===sid);
