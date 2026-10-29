@@ -2393,42 +2393,49 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  window.glurApplyPermissionVisibility=apply;
 })();
 
-// Restore last page only after role/permission loading has completed.
+// Persist navigation immediately, then restore after role + permission loading.
 (function(){
  const key=()=> 'glur_last_page_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE');
  const valid=p=>typeof p==='string'&&/^[a-z][a-z0-9-]{0,48}$/.test(p);
- let restoring=false;
+ let pending='',booting=false;
  const priorSet=setPage;
  setPage=function(p){
   priorSet(p);
-  if(!restoring&&currentUser&&page===p&&valid(p))sessionStorage.setItem(key(),p);
+  if(!booting&&currentUser&&page===p&&valid(p))sessionStorage.setItem(key(),p);
+ };
+ const tryRestore=()=>{
+  if(!pending||!currentUser||!glurAdjustRole)return;
+  const p=pending;
+  const roleOK=typeof glurRoleAllowed!=='function'||glurRoleAllowed(p);
+  const financeOK=!['profit','closing-report'].includes(p)||glurCanAdjust();
+  if(!roleOK||!financeOK){pending='';booting=false;sessionStorage.removeItem(key());return}
+  // Permission loader has finished; normal setPage applies all UI guards.
+  pending='';booting=false;
+  setPage(p);
+  if(page!==p)sessionStorage.removeItem(key());
+ };
+ const priorLoadAccess=glurLoadAdjustmentAccess;
+ glurLoadAdjustmentAccess=async function(...args){
+  const result=await priorLoadAccess.apply(this,args);
+  tryRestore();
+  return result;
+ };
+ const priorLoadPermissions=glurLoadMyPermissions;
+ glurLoadMyPermissions=async function(...args){
+  const result=await priorLoadPermissions.apply(this,args);
+  tryRestore();
+  return result;
  };
  const priorAuth=showAuthenticated;
  showAuthenticated=function(u){
-  const saved=sessionStorage.getItem(key());
+  pending=sessionStorage.getItem(key())||'';
+  booting=!!pending&&pending!=='dashboard'&&valid(pending);
   priorAuth(u);
-  if(saved&&valid(saved)&&saved!=='dashboard'){
-   // Role and permission checks can temporarily allow only dashboard during login.
-   restoring=true;
-   const restore=()=>{
-    if(!currentUser)return;
-    const roleReady=typeof glurAdjustRole==='undefined'||!!glurAdjustRole;
-    if(!roleReady)return;
-    const roleOK=typeof glurRoleAllowed!=='function'||glurRoleAllowed(saved);
-    const permOK=typeof glurCanAdjust!=='function'||!['profit','closing-report'].includes(saved)||glurCanAdjust();
-    if(roleOK&&permOK){restoring=false;setPage(saved)}else{restoring=false;sessionStorage.removeItem(key())}
-   };
-   const previousPermissions=glurLoadMyPermissions;
-   glurLoadMyPermissions=async function(...args){
-    const result=await previousPermissions.apply(this,args);
-    restore();
-    return result;
-   };
-   // Fallback for accounts whose permission load completes before auth display.
-   Promise.resolve().then(()=>{if(typeof glurLoadMyPermissions==='function')glurLoadMyPermissions()});
-  }
+  if(!booting){pending='';return}
+  // On auth restore, role load is asynchronous. Avoid overwriting saved page.
+  if(glurAdjustRole)tryRestore();
  };
- window.addEventListener('pagehide',()=>{if(currentUser&&valid(page)&&!restoring)sessionStorage.setItem(key(),page)});
+ window.addEventListener('pagehide',()=>{if(currentUser&&!booting&&valid(page))sessionStorage.setItem(key(),page)});
 })();
 
 </script>
