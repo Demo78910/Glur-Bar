@@ -1750,6 +1750,8 @@ async function glurTestFinanceExport(kind){
  ]);
  if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
  const stock=stockResult.data||[];
+ // LIVE historical stock exports require actual LIVE snapshots, never silently substitute TEST data.
+ if(GLUR_SHOP_ID===GLUR_LIVE_SHOP_ID && !stock.length && kind==='xlsx')throw Error('LIVE ยังไม่มี Stock Snapshot ย้อนหลัง: ไม่สามารถส่งออก Excel ที่มีสต๊อกย้อนหลังครบถ้วนได้ กรุณาตั้งค่าการบันทึก Snapshot ของ LIVE ก่อน');
  const bangkokDay=(iso)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(iso));
  const sales=(saleResult.data||[]).map(s=>{
   const t=Date.parse(s.sold_at);
@@ -1768,7 +1770,7 @@ async function glurTestFinanceExport(kind){
  if(kind==='xlsx'){
   if(!window.ExcelJS)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';script.onload=resolve;script.onerror=()=>reject(Error('โหลดตัวสร้าง Excel ไม่สำเร็จ'));document.head.appendChild(script)});
   if(!window.ExcelJS)throw Error('ไม่พบตัวสร้าง Excel');
-  const wb=new ExcelJS.Workbook();wb.creator='GLUR BAR TEST';wb.created=new Date();
+  const wb=new ExcelJS.Workbook();wb.creator='GLUR BAR';wb.created=new Date();
   const money=n=>Number(n||0);
   const total=key=>cs.reduce((v,c)=>v+money(c[key]),0);
   const menuTotals=new Map();
