@@ -1301,7 +1301,7 @@ showAuthenticated=function(user){glurAdjustRole='';glurEditingSaleId=null;glurSa
 
 
 // GLUR BAR team administration and stock adjustment audit (cloud)
-function glurCanManageTeam(){return glurAdjustRole==='owner'||glurAdjustRole==='manager'}
+function glurCanManageTeam(){return glurAdjustRole==='owner'}
 const GLUR_PERMISSION_ITEMS=[['stock_view','ดูสต๊อก'],['stock_create','เพิ่มสต๊อก'],['stock_edit','แก้ไขสต๊อก'],['stock_delete','ลบสต๊อก'],['stock_waste','จัดการของเสีย'],['recipes_view','ดูสูตร'],['recipes_create','เพิ่มสูตร'],['recipes_edit','แก้ไขสูตร'],['recipes_delete','ลบสูตร'],['sales_create','บันทึกยอดขาย'],['sales_edit','แก้ไขยอดขาย'],['sales_cancel','ยกเลิกยอดขาย'],['costs_view','ดูต้นทุน'],['expenses_manage','จัดการค่าใช้จ่าย'],['receiving_manage','รับสินค้าเข้า'],['reports_view','ดูรายงาน'],['closing_manage','ปิดยอดรายวัน'],['audit_view','ดูประวัติ'],['employees_edit','แก้ไขข้อมูลพนักงาน'],['employees_permissions','กำหนดสิทธิ์พนักงาน']];
 let glurMyPermissions={};
 async function glurLoadMyPermissions(){
