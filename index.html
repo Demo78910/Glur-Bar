@@ -2392,6 +2392,21 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&currentUser)glurLoadMyPermissions()});
  window.glurApplyPermissionVisibility=apply;
 })();
+
+// Remember the last permitted page per mode across reloads, without storing account data.
+(function(){
+ const key=()=> 'glur_last_page_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE');
+ const allowed=p=>typeof p==='string'&&/^[a-z][a-z0-9-]{0,48}$/.test(p)&&(!window.glurRoleAllowed||window.glurRoleAllowed(p));
+ const previousSet=setPage;
+ setPage=function(p){previousSet(p);if(currentUser&&page===p&&allowed(p))sessionStorage.setItem(key(),p)};
+ const previousAuth=showAuthenticated;
+ showAuthenticated=function(u){
+  previousAuth(u);
+  const saved=sessionStorage.getItem(key());
+  if(saved&&allowed(saved)&&saved!=='dashboard')setPage(saved);
+ };
+ window.addEventListener('pagehide',()=>{if(currentUser&&allowed(page))sessionStorage.setItem(key(),page)});
+})();
 </script>
 </body>
 </html>
