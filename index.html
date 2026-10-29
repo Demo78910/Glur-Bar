@@ -1745,7 +1745,20 @@ async function glurTestFinanceExport(kind){
  ]);
  if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
  const stock=stockResult.data||[];
- const sales=(saleResult.data||[]).map(s=>{const t=Date.parse(s.sold_at),c=cs.find(x=>x.period_start&&x.period_end&&t>=Date.parse(x.period_start)&&t<=Date.parse(x.period_end));return Object.assign({},s,{day:c?c.business_date:''})}).filter(x=>x.day);
+ const bangkokDay=(iso)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(iso));
+ const sales=(saleResult.data||[]).map(s=>{
+  const t=Date.parse(s.sold_at);
+  const date=bangkokDay(s.sold_at);
+  const c=cs.find(x=>x.period_start&&x.period_end&&t>=Date.parse(x.period_start)&&t<Date.parse(x.period_end))
+   ||cs.find(x=>!x.period_start&&!x.period_end&&x.business_date===date);
+  return Object.assign({},s,{day:c?c.business_date:''});
+ }).filter(x=>x.day);
+ const salesRevenue=sales.reduce((n,x)=>n+Number(x.total_amount||0),0);
+ const closingRevenue=cs.reduce((n,x)=>n+Number(x.revenue||0),0);
+ const salesDrinks=sales.reduce((n,x)=>n+Number(x.quantity_sold||0),0);
+ const closingDrinks=cs.reduce((n,x)=>n+Number(x.drinks_sold||0),0);
+ if(Math.abs(salesRevenue-closingRevenue)>0.02||Math.abs(salesDrinks-closingDrinks)>0.01)
+  throw Error('ยอดขายรายละเอียดไม่ตรงกับยอดปิดยอด: รายละเอียด '+salesRevenue.toFixed(2)+' บาท / '+salesDrinks+' แก้ว, ปิดยอด '+closingRevenue.toFixed(2)+' บาท / '+closingDrinks+' แก้ว กรุณาตรวจสอบก่อนส่งออก');
 
  if(kind==='xlsx'){
   if(!window.ExcelJS)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';script.onload=resolve;script.onerror=()=>reject(Error('โหลดตัวสร้าง Excel ไม่สำเร็จ'));document.head.appendChild(script)});
