@@ -2300,6 +2300,14 @@ async function glurOwnerStockDialog(sid){
 #glurModeBar button{background:#3a2922;border:1px solid #b86b3a;color:#fff;border-radius:7px;padding:8px 12px;cursor:pointer}
 body.glur-test-mode #glurModeBar{background:#4c2511;border:2px solid #ff9a4f}
 body.glur-test-mode #glurModeBar strong{color:#ffb578}
+
+/* Persistent mode indicator: readable even when the page scrolls on iPhone. */
+#glurModeBar{position:sticky!important;top:0!important;z-index:9999!important;min-height:52px!important;isolation:isolate!important;opacity:1!important;visibility:visible!important}
+#glurModeLabel{display:inline-flex!important;align-items:center!important;min-height:32px!important;padding:5px 12px!important;border-radius:8px!important;font-weight:900!important;letter-spacing:.07em!important;opacity:1!important;visibility:visible!important;white-space:nowrap!important}
+body.glur-test-mode #glurModeBar{background:#6b260a!important;border:3px solid #ffd166!important;color:#fff!important}
+body.glur-test-mode #glurModeLabel{background:#ffe39b!important;color:#402000!important;-webkit-text-fill-color:#402000!important}
+body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921!important;-webkit-text-fill-color:#1c2921!important}
+@media(max-width:390px){#glurModeBar{padding:6px 8px!important}#glurModeLabel{font-size:12px!important;padding:5px 8px!important}}
 #glurModeBar .glur-mode-active{background:#ad4b19;color:white}
 @media(max-width:649px){#glurModeBar{padding:8px 12px;gap:6px;font-size:12px}#glurModeBar button{padding:7px 10px;font-size:12px}}
 </style>
