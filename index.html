@@ -2393,20 +2393,44 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  window.glurApplyPermissionVisibility=apply;
 })();
 
-// Remember the last permitted page per mode across reloads, without storing account data.
+// Restore last page only after role/permission loading has completed.
 (function(){
  const key=()=> 'glur_last_page_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE');
- const allowed=p=>typeof p==='string'&&/^[a-z][a-z0-9-]{0,48}$/.test(p)&&(!window.glurRoleAllowed||window.glurRoleAllowed(p));
- const previousSet=setPage;
- setPage=function(p){previousSet(p);if(currentUser&&page===p&&allowed(p))sessionStorage.setItem(key(),p)};
- const previousAuth=showAuthenticated;
- showAuthenticated=function(u){
-  previousAuth(u);
-  const saved=sessionStorage.getItem(key());
-  if(saved&&allowed(saved)&&saved!=='dashboard')setPage(saved);
+ const valid=p=>typeof p==='string'&&/^[a-z][a-z0-9-]{0,48}$/.test(p);
+ let restoring=false;
+ const priorSet=setPage;
+ setPage=function(p){
+  priorSet(p);
+  if(!restoring&&currentUser&&page===p&&valid(p))sessionStorage.setItem(key(),p);
  };
- window.addEventListener('pagehide',()=>{if(currentUser&&allowed(page))sessionStorage.setItem(key(),page)});
+ const priorAuth=showAuthenticated;
+ showAuthenticated=function(u){
+  const saved=sessionStorage.getItem(key());
+  priorAuth(u);
+  if(saved&&valid(saved)&&saved!=='dashboard'){
+   // Role and permission checks can temporarily allow only dashboard during login.
+   restoring=true;
+   const restore=()=>{
+    if(!currentUser)return;
+    const roleReady=typeof glurAdjustRole==='undefined'||!!glurAdjustRole;
+    if(!roleReady)return;
+    const roleOK=typeof glurRoleAllowed!=='function'||glurRoleAllowed(saved);
+    const permOK=typeof glurCanAdjust!=='function'||!['profit','closing-report'].includes(saved)||glurCanAdjust();
+    if(roleOK&&permOK){restoring=false;setPage(saved)}else{restoring=false;sessionStorage.removeItem(key())}
+   };
+   const previousPermissions=glurLoadMyPermissions;
+   glurLoadMyPermissions=async function(...args){
+    const result=await previousPermissions.apply(this,args);
+    restore();
+    return result;
+   };
+   // Fallback for accounts whose permission load completes before auth display.
+   Promise.resolve().then(()=>{if(typeof glurLoadMyPermissions==='function')glurLoadMyPermissions()});
+  }
+ };
+ window.addEventListener('pagehide',()=>{if(currentUser&&valid(page)&&!restoring)sessionStorage.setItem(key(),page)});
 })();
+
 </script>
 </body>
 </html>
