@@ -1719,13 +1719,18 @@ function glurCRExport(){
 }
 
 function glurFinStockCategory(name){
- const n=String(name||'').replace(/^TEST DEMO\s*[·:]\s*/i,'').replace(/^TEST\s+/i,'').toLowerCase();
- if(/monin|syrup|ไซรัป|น้ำเชื่อม|honey syrup|cream soda/.test(n))return 'ไซรัป / น้ำเชื่อม';
- if(/vodka|gin|rum|whisky|whiskey|bourbon|jim beam|jameson|mekhong|sangsom|818 blanco|818 reposado|silver wolf|chalong bay|havana|bacardi|kulov|absolut|tanqueray|roku|roul|gilbey|dead man/.test(n))return 'สุราหลัก';
+ const n=String(name||'').replace(/^TEST DEMO\s*[·:]\s*/i,'').replace(/^TEST\s+/i,'').toLowerCase().trim();
+ if(/ginger|mint|rosemary|pandan|lemongrass|kaffir|herb|ใบเตย|ตะไคร้|ขิง|สะระแหน่/.test(n))return 'สมุนไพร';
+ if(/cucumber|passion fruit pulp|orange(?! juice)|lemon(?! juice)|lime(?! juice)|แตงกวา|เสาวรส|ส้ม|มะนาว|เลมอน/.test(n))return 'ผลไม้ / ผักสด';
+ if(/monin|syrup|ไซรัป|น้ำเชื่อม|cream soda/.test(n))return 'ไซรัป / น้ำเชื่อม';
  if(/peachtree|midori|campari|cinzano|d.o.m|de kuyper|triple sec|liqueur|vermouth/.test(n))return 'ลิเคียวร์ / เวอร์มุธ';
  if(/juice|cranberry|tipco|doi kham|apple|guava|น้ำผลไม้|โซดา|tonic/.test(n))return 'น้ำผลไม้ / มิกเซอร์';
- if(/mint|rosemary|pandan|ginger|lemongrass|kaffir|herb|ใบเตย|ตะไคร้|ขิง|สะระแหน่/.test(n))return 'สมุนไพร';
- if(/cucumber|passion fruit pulp|orange|lemon|lime|fruit|แตงกวา|เสาวรส|ส้ม|มะนาว|เลมอน/.test(n))return 'ผลไม้ / ผักสด';
+ if(/vodka|kulov|absolut|silver wolf/.test(n))return 'สุราหลัก · Vodka';
+ if(/gin|tanqueray|roku|roul|gilbey/.test(n))return 'สุราหลัก · Gin';
+ if(/rum|chalong bay|havana|bacardi|dead man/.test(n))return 'สุราหลัก · Rum';
+ if(/whisky|whiskey|bourbon|jim beam|jameson/.test(n))return 'สุราหลัก · Whisky';
+ if(/818 blanco|818 reposado|tequila/.test(n))return 'สุราหลัก · Tequila';
+ if(/mekhong|sangsom/.test(n))return 'สุราหลัก · สุราไทย';
  return 'วัตถุดิบอื่น ๆ';
 }
 function glurFinBestSnapshot(cs,stock){
@@ -1827,6 +1832,44 @@ async function glurTestFinanceExport(kind){
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_TEST_Owner_Report_'+from+'_'+to+'.xlsx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
   return;
  }
+ if(kind==='png-month'){
+  const lastClosing=cs.slice().sort((a,b)=>b.business_date.localeCompare(a.business_date)||Number(b.session_no)-Number(a.session_no))[0];
+  const latestStock=stock.filter(x=>x.closing_id===lastClosing.id).sort((a,b)=>glurFinStockCategory(a.stock_name).localeCompare(glurFinStockCategory(b.stock_name),'th')||a.stock_name.localeCompare(b.stock_name,'th'));
+  const menuMap=new Map();
+  for(const sale of sales){const name=sale.recipe_name||'ไม่ระบุเมนู',v=menuMap.get(name)||{qty:0,revenue:0};v.qty+=Number(sale.quantity_sold||0);v.revenue+=Number(sale.total_amount||0);menuMap.set(name,v)}
+  const menuRows=Array.from(menuMap.entries()).sort((a,b)=>b[1].revenue-a[1].revenue);
+  const dayMap=new Map();for(const c of cs){const v=dayMap.get(c.business_date)||{revenue:0,drinks:0};v.revenue+=Number(c.revenue||0);v.drinks+=Number(c.drinks_sold||0);dayMap.set(c.business_date,v)}
+  const dayRows=Array.from(dayMap.entries()).sort((a,b)=>a[0].localeCompare(b[0]));
+  const cats=Array.from(new Set(latestStock.map(x=>glurFinStockCategory(x.stock_name))));
+  const rowH=39,base=490,chartH=270;
+  const menuStart=base+chartH+70,dayStart=menuStart+70+menuRows.length*rowH,stockStart=dayStart+70+dayRows.length*rowH;
+  const height=stockStart+95+(latestStock.length+cats.length*2)*rowH+110;
+  const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=height;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#171717';ctx.fillRect(0,0,1080,height);
+  const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const heading=(str,y)=>{ctx.fillStyle='#ff913d';ctx.font='bold 30px sans-serif';ctx.fillText(str,50,y)};
+  ctx.fillStyle='#ff913d';ctx.font='bold 52px sans-serif';ctx.fillText('GLUR BAR · TEST',50,82);
+  ctx.fillStyle='#fff';ctx.font='bold 31px sans-serif';ctx.fillText('รายงานยอดขายย้อนหลัง '+from+' ถึง '+to,50,137);
+  ctx.fillStyle='#bbb';ctx.font='22px sans-serif';ctx.fillText(dayRows.length+' วัน · '+cs.length+' รอบปิดยอด · ข้อมูลทดลอง',50,178);
+  ctx.fillStyle='#252525';ctx.fillRect(42,205,996,225);
+  const total=k=>cs.reduce((n,c)=>n+Number(c[k]||0),0);
+  const metrics=[['ยอดขาย','฿'+fmt(total('revenue'))],['จำนวนแก้ว',total('drinks_sold')+' แก้ว'],['ต้นทุนขาย','฿'+fmt(total('cogs'))],['ค่าใช้จ่าย','฿'+fmt(total('expenses'))],['กำไรหลังค่าใช้จ่าย','฿'+fmt(total('profit_after_expenses'))]];
+  metrics.forEach(([label,value],i)=>{const x=62+(i%2)*500,y=250+Math.floor(i/2)*66;ctx.fillStyle='#aaa';ctx.font='21px sans-serif';ctx.fillText(label,x,y);ctx.fillStyle=i===4?'#ff913d':'#fff';ctx.font='bold 26px sans-serif';ctx.fillText(value,x+215,y)});
+  heading('กราฟยอดขายรายวัน',base);
+  const max=Math.max(1,...dayRows.map(x=>x[1].revenue)),plotTop=base+40,plotBottom=base+chartH-25,barW=Math.min(23,900/Math.max(1,dayRows.length)-5);
+  dayRows.forEach(([date,v],i)=>{const x=65+i*(950/dayRows.length),h=v.revenue/max*(plotBottom-plotTop);ctx.fillStyle='#ff913d';ctx.fillRect(x,plotBottom-h,barW,h);if(i%Math.max(1,Math.ceil(dayRows.length/8))===0){ctx.fillStyle='#aaa';ctx.font='15px sans-serif';ctx.fillText(date.slice(5),x,plotBottom+24)}});
+  heading('เมนูขายดี · ทุกรายการ',menuStart);let y=menuStart+50;
+  for(const [name,v] of menuRows){ctx.fillStyle='#fff';ctx.font='22px sans-serif';ctx.fillText(name,55,y,650);ctx.textAlign='right';ctx.fillText(v.qty+' แก้ว / ฿'+fmt(v.revenue),1020,y);ctx.textAlign='left';y+=rowH}
+  heading('ยอดขายรายวัน ('+dayRows.length+' วัน)',dayStart);y=dayStart+50;
+  dayRows.forEach(([date,v],i)=>{if(i%2===0){ctx.fillStyle='#242424';ctx.fillRect(42,y-28,996,rowH)}ctx.fillStyle='#fff';ctx.font='21px sans-serif';ctx.fillText(date,55,y);ctx.textAlign='right';ctx.fillText(v.drinks+' แก้ว / ฿'+fmt(v.revenue),1020,y);ctx.textAlign='left';y+=rowH});
+  heading('สต๊อกวันสุดท้าย '+lastClosing.business_date+' ('+latestStock.length+' รายการ)',stockStart);y=stockStart+52;let previous='';
+  latestStock.forEach((x,i)=>{const cat=glurFinStockCategory(x.stock_name);if(cat!==previous){if(previous)y+=rowH;previous=cat;ctx.fillStyle='#ff913d';ctx.font='bold 24px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowH}
+   if(i%2===0){ctx.fillStyle='#242424';ctx.fillRect(42,y-28,996,rowH)}
+   ctx.fillStyle='#fff';ctx.font='21px sans-serif';ctx.fillText((i+1)+'. '+x.stock_name,55,y,730);ctx.textAlign='right';ctx.fillText(Number(x.quantity).toLocaleString('th-TH')+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowH});
+  ctx.fillStyle='#aaa';ctx.font='19px sans-serif';ctx.fillText('TEST: ข้อมูลสต๊อกบางส่วนจำลองจาก Snapshot ก่อนหน้า ไม่ใช่การตรวจนับจริง',50,height-45);
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพรายเดือนไม่สำเร็จ');
+  const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='GLUR_TEST_30Day_'+from+'_'+to+'.png';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);return;
+ }
  const selectedDay=document.getElementById('glurFinDay')?.value;const day=cs.some(c=>c.business_date===selectedDay)?selectedDay:cs.map(c=>c.business_date).sort().at(-1);const dayClosings=cs.filter(c=>c.business_date===day);
  if(!dayClosings.length)throw Error('ไม่มีรายการปิดยอดในวันที่เลือก');
  const last=dayClosings.slice().sort((a,b)=>Number(b.session_no)-Number(a.session_no))[0],items=stock.filter(x=>x.closing_id===last.id);
@@ -1867,9 +1910,9 @@ function renderGlurClosingReport(){
  const totals=glurCRRows.reduce((a,x)=>{a.revenue+=glurCRNum(x.revenue);a.cogs+=glurCRNum(x.cogs);a.expenses+=glurCRNum(x.expenses);a.qty+=glurCRNum(x.drinks_sold);return a},{revenue:0,cogs:0,expenses:0,qty:0});
  const rows=glurCRRows.map(x=>{const d={revenue:x.revenue,cogs:x.cogs,expenses:x.expenses,qty:x.drinks_sold};const deltaRevenue=glurCRNum(d.revenue)-glurCRNum(x.revenue),deltaCost=glurCRNum(d.cogs)-glurCRNum(x.cogs),deltaExpense=glurCRNum(d.expenses)-glurCRNum(x.expenses),deltaQty=glurCRNum(d.qty)-glurCRNum(x.drinks_sold);const changed=false;
  return `<div class="card"><div class="row between"><strong>${esc(x.business_date)} · รอบที่ ${esc(x.session_no||1)}</strong><span class="pill">บันทึกปิดยอด</span></div><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ${esc(x.closer_display_name||'ไม่บันทึกชื่อ ณ วันปิด')} · @${esc(x.closer_username||'ไม่ทราบไอดี')}</div><div class="tableline"><span>ยอดขาย ณ ปิดยอด</span><strong>${glurMoneySafe(x.revenue)}</strong></div><div class="tableline"><span>จำนวนแก้ว ณ ปิด</span><strong>${esc(x.drinks_sold)}</strong></div><div class="tableline"><span>กำไรหลังค่าใช้จ่าย ณ ปิด</span><strong>${glurMoneySafe(x.profit_after_expenses)}</strong></div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}</div>`}).join('');
- shell('รายงานปิดยอด · Closing Report',`<div class="hint">รายงาน Snapshot แยกตามรอบ (ตั้งแต่ติดตั้งระบบใหม่ใช้วันทำการ 03:00–02:59 และค่าใช้จ่ายตามเวลาบันทึกจริง) · ประวัติเดิมยังใช้รอบ 05:00 ตามที่เคยบันทึก</div><div class="card"><form id="glurCRForm" class="stack"><div class="formgrid"><div class="field"><label>จากวันที่</label><input type="date" name="from" value="${esc(from)}" required></div><div class="field"><label>ถึงวันที่</label><input type="date" name="to" max="${glurThaiBusinessToday()}" value="${esc(to)}" required></div></div><button class="btn full" type="submit" ${glurCRBusy?'disabled':''}>${glurCRBusy?'กำลังโหลด…':'↻ โหลดรายงาน'}</button></form>${glurCRError?`<div class="hint warn">${esc(glurCRError)}</div>`:''}</div>${glurCRLoaded?`<div class="grid">${metric('จำนวนรอบที่ปิด',String(glurCRRows.length))}${metric('ยอดขาย ณ ปิดยอด',glurMoneySafe(totals.revenue))}${metric('กำไรขั้นต้น ณ ปิดยอด',glurMoneySafe(totals.revenue-totals.cogs))}${metric('จำนวนแก้ว ณ ปิดยอด',String(totals.qty))}</div><button class="btn secondary full" id="glurCRCSV" ${!glurCRRows.length?'disabled':''}>↓ ส่งออก CSV</button>${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?`<div class="card"><strong>ส่งออกรายงาน TEST</strong><div class="hint">Excel สะสมตามช่วงวันที่ · PNG วันเดียว พร้อมสต๊อก Snapshot</div><button class="btn secondary full" id="glurFinExcel">Excel (.xlsx)</button><label>วันที่สำหรับภาพ</label><select id="glurFinDay">${Array.from(new Set(glurCRRows.map(x=>x.business_date))).sort().reverse().map(day=>`<option value="${esc(day)}">${esc(day)} · ปิดยอดแล้ว</option>`).join("")}</select><button class="btn secondary full" id="glurFinImage">ภาพ (.png)</button></div>`:""}<div class="section-title">รายละเอียดวันที่ปิดยอด</div>${rows||empty('ไม่มีวันที่ปิดยอดในช่วงนี้')}`:'<div class="hint">เลือกช่วงวันที่ แล้วกดโหลดรายงาน</div>'}<div class="hint">สรุปด้านบนรวมเฉพาะวันที่มีการปิดยอดแล้ว · ผู้ปิดแสดงเป็นรหัสบัญชีเพื่อไม่เดาชื่อจากข้อมูลที่ไม่ยืนยัน</div>`);
+ shell('รายงานปิดยอด · Closing Report',`<div class="hint">รายงาน Snapshot แยกตามรอบ (ตั้งแต่ติดตั้งระบบใหม่ใช้วันทำการ 03:00–02:59 และค่าใช้จ่ายตามเวลาบันทึกจริง) · ประวัติเดิมยังใช้รอบ 05:00 ตามที่เคยบันทึก</div><div class="card"><form id="glurCRForm" class="stack"><div class="formgrid"><div class="field"><label>จากวันที่</label><input type="date" name="from" value="${esc(from)}" required></div><div class="field"><label>ถึงวันที่</label><input type="date" name="to" max="${glurThaiBusinessToday()}" value="${esc(to)}" required></div></div><button class="btn full" type="submit" ${glurCRBusy?'disabled':''}>${glurCRBusy?'กำลังโหลด…':'↻ โหลดรายงาน'}</button></form>${glurCRError?`<div class="hint warn">${esc(glurCRError)}</div>`:''}</div>${glurCRLoaded?`<div class="grid">${metric('จำนวนรอบที่ปิด',String(glurCRRows.length))}${metric('ยอดขาย ณ ปิดยอด',glurMoneySafe(totals.revenue))}${metric('กำไรขั้นต้น ณ ปิดยอด',glurMoneySafe(totals.revenue-totals.cogs))}${metric('จำนวนแก้ว ณ ปิดยอด',String(totals.qty))}</div><button class="btn secondary full" id="glurCRCSV" ${!glurCRRows.length?'disabled':''}>↓ ส่งออก CSV</button>${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?`<div class="card"><strong>ส่งออกรายงาน TEST</strong><div class="hint">Excel สะสมตามช่วงวันที่ · PNG รายวัน หรือสรุปย้อนหลังตามช่วงวันที่</div><button class="btn secondary full" id="glurFinExcel">Excel (.xlsx)</button><label>วันที่สำหรับภาพ</label><select id="glurFinDay">${Array.from(new Set(glurCRRows.map(x=>x.business_date))).sort().reverse().map(day=>`<option value="${esc(day)}">${esc(day)} · ปิดยอดแล้ว</option>`).join("")}</select><button class="btn secondary full" id="glurFinImage">ภาพรายวัน (.png)</button><button class="btn secondary full" id="glurFinMonth">ภาพสรุปย้อนหลังตามช่วงวันที่ (.png)</button></div>`:""}<div class="section-title">รายละเอียดวันที่ปิดยอด</div>${rows||empty('ไม่มีวันที่ปิดยอดในช่วงนี้')}`:'<div class="hint">เลือกช่วงวันที่ แล้วกดโหลดรายงาน</div>'}<div class="hint">สรุปด้านบนรวมเฉพาะวันที่มีการปิดยอดแล้ว · ผู้ปิดแสดงเป็นรหัสบัญชีเพื่อไม่เดาชื่อจากข้อมูลที่ไม่ยืนยัน</div>`);
  document.getElementById('glurCRForm').onsubmit=e=>{e.preventDefault();glurCRLoad(e.target.elements.from.value,e.target.elements.to.value)};
- const b=document.getElementById('glurCRCSV');if(b)b.onclick=glurCRExport;for(const [id,kind] of [['glurFinExcel','xlsx'],['glurFinImage','png']]){const el=document.getElementById(id);if(el)el.onclick=async()=>{el.disabled=true;try{await glurTestFinanceExport(kind)}catch(e){toast('ส่งออกไม่สำเร็จ: '+(e.message||e))}finally{el.disabled=false}}}
+ const b=document.getElementById('glurCRCSV');if(b)b.onclick=glurCRExport;for(const [id,kind] of [['glurFinExcel','xlsx'],['glurFinImage','png'],['glurFinMonth','png-month']]){const el=document.getElementById(id);if(el)el.onclick=async()=>{el.disabled=true;try{await glurTestFinanceExport(kind)}catch(e){toast('ส่งออกไม่สำเร็จ: '+(e.message||e))}finally{el.disabled=false}}}
 }
 const glurCRPriorRender=render;
 render=function(){if(!currentUser)return;if(page==='closing-report'){renderGlurClosingReport();return}glurCRPriorRender()};
