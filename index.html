@@ -1769,6 +1769,30 @@ async function glurTestFinanceExport(kind){
    ws.pageSetup={fitToPage:true,fitToWidth:1,fitToHeight:0,orientation:'landscape'};
    return ws;
   }
+  function groupedStockSheet(name,headers,rows,widths,moneyCols,categoryIndex,groupKeyIndex){
+   const ws=sheet(name,headers,[],widths,moneyCols);
+   ws.autoFilter=undefined;
+   let previousKey=null,previousCategory=null,position=0;
+   for(const arr of rows){
+    const key=groupKeyIndex===null?'':String(arr[groupKeyIndex]||'');
+    const category=String(arr[categoryIndex]||'วัตถุดิบอื่น ๆ');
+    if(previousKey!==null&&(key!==previousKey||category!==previousCategory)){const gap=ws.addRow([]);gap.height=16;gap.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFFFF'}};}
+    if(key!==previousKey||category!==previousCategory){
+     const heading=ws.addRow([]);heading.height=32;ws.mergeCells(heading.number,1,heading.number,headers.length);
+     const cell=heading.getCell(1);cell.value=(key?key+'  |  ':'')+'หมวด '+category;
+     cell.font={name:'Arial',bold:true,size:13,color:{argb:white}};
+     cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:black}};
+     cell.alignment={vertical:'middle',indent:1};
+     previousKey=key;previousCategory=category;position=0;
+    }
+    const row=ws.addRow(arr);row.height=26;
+    row.eachCell((cell,i)=>{cell.font={name:'Arial',size:11,color:{argb:black}};cell.alignment={vertical:'middle',horizontal:typeof cell.value==='number'?'right':'left'};
+     if(position%2===0)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:cream}};
+     if(moneyCols.includes(i))cell.numFmt=moneyFmt;else if(typeof cell.value==='number')cell.numFmt='#,##0.##';
+    });position++;
+   }
+   return ws;
+  }
   const daily=cs.slice().sort((a,b)=>a.business_date.localeCompare(b.business_date)).map(c=>[c.business_date,money(c.sale_transactions),money(c.drinks_sold),money(c.revenue),money(c.cogs),money(c.expenses),money(c.profit_after_expenses)]);
   const overview=sheet('01 ภาพรวม',['วันที่ทำการ','จำนวนบิล','แก้วที่ขาย','ยอดขาย (บาท)','ต้นทุน (บาท)','ค่าใช้จ่าย (บาท)','กำไร (บาท)'],daily,[20,17,17,24,24,24,26],[4,5,6,7]);
   const metrics=[['ยอดขายรวม',total('revenue')],['จำนวนแก้ว',total('drinks_sold')],['ต้นทุนวัตถุดิบ',total('cogs')],['กำไรขั้นต้น',total('revenue')-total('cogs')],['ค่าใช้จ่าย',total('expenses')],['กำไรหลังค่าใช้จ่าย',total('profit_after_expenses')]];
@@ -1777,10 +1801,10 @@ async function glurTestFinanceExport(kind){
   sheet('02 ยอดขายแยกเมนู',['ชื่อเมนู','จำนวนแก้ว','ยอดขาย (บาท)','ต้นทุน (บาท)','กำไรขั้นต้น (บาท)'],menuRows,[40,18,25,25,28],[3,4,5]);
   sheet('03 รายการขาย',['วันทำการ','ชื่อเมนู','จำนวนแก้ว','ยอดขาย (บาท)','ต้นทุน (บาท)'],sales.map(x=>[x.day,x.recipe_name,money(x.quantity_sold),money(x.total_amount),money(x.total_cost)]),[20,42,18,26,26],[4,5]);
   const stockRows=stock.map(x=>{const c=cs.find(y=>y.id===x.closing_id);return[c?.business_date||'',c?.session_no||'',glurFinStockCategory(x.stock_name),x.stock_name,x.unit,money(x.quantity),money(x.cost_per_unit)]}).sort((a,b)=>a[0].localeCompare(b[0])||a[2].localeCompare(b[2],'th')||a[3].localeCompare(b[3],'th'));
-  sheet('04 สต๊อกย้อนหลัง',['วันปิดยอด','รอบ','หมวดสินค้า','ชื่อสินค้า','หน่วย','คงเหลือ ณ ปิดยอด','ต้นทุนต่อหน่วย (บาท)'],stockRows,[20,12,27,48,14,28,30],[7]);
+  groupedStockSheet('04 สต๊อกย้อนหลัง',['วันปิดยอด','รอบ','หมวดสินค้า','ชื่อสินค้า','หน่วย','คงเหลือ ณ ปิดยอด','ต้นทุนต่อหน่วย (บาท)'],stockRows,[20,12,27,48,14,28,30],[7],2,0);
   const best=glurFinBestSnapshot(cs,stock),last=best?.closing;
   const latest=stock.filter(x=>x.closing_id===last?.id).sort((a,b)=>glurFinStockCategory(a.stock_name).localeCompare(glurFinStockCategory(b.stock_name),'th')||a.stock_name.localeCompare(b.stock_name,'th'));
-  const latestWs=sheet('05 สต๊อกล่าสุด',['หมวดสินค้า','ชื่อสินค้า','หน่วย','คงเหลือ ณ '+(last?.business_date||to),'ต้นทุนต่อหน่วย (บาท)'],latest.map(x=>[glurFinStockCategory(x.stock_name),x.stock_name,x.unit,money(x.quantity),money(x.cost_per_unit)]),[27,48,16,31,31],[5]);
+  const latestWs=groupedStockSheet('05 สต๊อกล่าสุด',['หมวดสินค้า','ชื่อสินค้า','หน่วย','คงเหลือ ณ '+(last?.business_date||to),'ต้นทุนต่อหน่วย (บาท)'],latest.map(x=>[glurFinStockCategory(x.stock_name),x.stock_name,x.unit,money(x.quantity),money(x.cost_per_unit)]),[27,48,16,31,31],[5],0,null);
   latestWs.getCell('A3').value='Snapshot ที่มีรายการครบที่สุด: '+(last?.business_date||'ไม่มีข้อมูล')+' ('+latest.length+' รายการ)';
   latestWs.getCell('A4').value='หมายเหตุ: วันที่ล่าสุดอาจมีรายการน้อยกว่า จึงเลือก Snapshot ที่ครบที่สุด';
   latestWs.getCell('A3').font={bold:true,color:{argb:'FFAD4E00'}};
@@ -1800,7 +1824,7 @@ async function glurTestFinanceExport(kind){
  const menuLines=Array.from(menus.entries()).sort((a,b)=>b[1].qty-a[1].qty);
  const canvas=document.createElement('canvas');canvas.width=1080;
  const rowHeight=46,menuTop=475,stockTop=menuTop+85+menuLines.length*rowHeight;const categories=Array.from(new Set(sortedItems.map(x=>glurFinStockCategory(x.stock_name))));
- canvas.height=stockTop+110+(sortedItems.length+categories.length)*rowHeight+100;
+ canvas.height=stockTop+110+(sortedItems.length+categories.length*2)*rowHeight+100;
  const ctx=canvas.getContext('2d');
  ctx.fillStyle='#171717';ctx.fillRect(0,0,canvas.width,canvas.height);
  ctx.fillStyle='#ff913d';ctx.font='bold 52px sans-serif';ctx.fillText('GLUR BAR · TEST',50,82);
@@ -1816,7 +1840,7 @@ async function glurTestFinanceExport(kind){
  if(!menuLines.length){ctx.fillStyle='#bbbbbb';ctx.fillText('ไม่มีรายการขายในรอบนี้',55,y);y+=rowHeight}
  for(const [name,v] of menuLines){ctx.fillStyle='#ffffff';ctx.fillText(name,55,y,650);ctx.textAlign='right';ctx.fillText(v.qty+' แก้ว  /  ฿'+fmt(v.revenue),1020,y);ctx.textAlign='left';y+=rowHeight}
  y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อกคงเหลือทั้งหมด ('+sortedItems.length+' รายการ)',50,y);
- y+=58;let currentCategory='';for(let i=0;i<sortedItems.length;i++){const x=sortedItems[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText(cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
+ y+=58;let currentCategory='';for(let i=0;i<sortedItems.length;i++){const x=sortedItems[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){if(currentCategory)y+=rowHeight;currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
  ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,740);
  ctx.textAlign='right';ctx.fillText(Number(x.quantity).toLocaleString('th-TH')+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
  ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ข้อมูลสต๊อกเป็น Snapshot ณ เวลาปิดยอด · โหมด TEST',50,canvas.height-40);
