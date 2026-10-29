@@ -402,7 +402,7 @@ function glurShowFailure(message){
 function toast(msg){const text=String(msg??'');const t=document.getElementById('toast');t.textContent=text;t.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.add('hidden'),3600);if(/ไม่สำเร็จ|ไม่ได้|ไม่สามารถ|ผิดพลาด|ไม่ถูกต้อง|ไม่มีสิทธิ์|สต๊อกไม่พอ|กรุณา|ล้มเหลว|error:/i.test(text))glurShowFailure(text)}
 window.addEventListener('unhandledrejection',event=>{const msg=event.reason?.message||String(event.reason||'ข้อผิดพลาดที่ไม่ทราบสาเหตุ');glurShowFailure('เกิดข้อผิดพลาดระหว่างติดต่อระบบ: '+msg)});
 window.addEventListener('error',event=>{if(event.message)glurShowFailure('เกิดข้อผิดพลาดในการทำงานของหน้าเว็บ: '+event.message)});
-function setPage(p){if(!currentUser)return;page=p;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));render()}
+function setPage(p){if(!currentUser)return;page=p;try{localStorage.setItem('glur_last_page_'+currentUser.id+'_'+GLUR_SHOP_ID,p)}catch(e){}if(location.hash!=='#'+encodeURIComponent(p))history.replaceState(null,'','#'+encodeURIComponent(p));document.querySelectorAll('#nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===p));render()}
 document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)setPage(b.dataset.page)});
 function stockById(sid){return db.stock.find(s=>s.id===sid)}
 function recipeCost(r){return (r.ingredients||[]).reduce((sum,x)=>{const s=stockById(x.stockId);return sum+(s?num(x.qty)*num(s.cost):0)},0)}
@@ -654,10 +654,10 @@ async function glurLogout(){
 }
 document.getElementById('glurLogout').addEventListener('click',glurLogout);
 function showAuthenticated(user){
-  currentUser=user;page='dashboard';
+  currentUser=user;try{const h=decodeURIComponent(location.hash.slice(1));const saved=localStorage.getItem('glur_last_page_'+user.id+'_'+GLUR_SHOP_ID);page=[...document.querySelectorAll('#nav button[data-page]')].some(b=>b.dataset.page===h)?h:(saved||'dashboard')}catch(e){page='dashboard'};
   document.getElementById('nav').classList.remove('hidden');
   document.getElementById('glurAccount').classList.remove('hidden');
-  document.querySelectorAll('#nav button').forEach(b=>{b.classList.remove('hidden');b.classList.toggle('active',b.dataset.page==='dashboard')});
+  document.querySelectorAll('#nav button').forEach(b=>{b.classList.remove('hidden');b.classList.toggle('active',b.dataset.page===page)});
   render();loadCloudStock();updateGlurAccount(user);
 }
 
@@ -2047,7 +2047,7 @@ glurLoadAdjustmentAccess=async function(){await glurActivityOldAccess();document
 // GLUR BAR Stage 2: presentation guard; Supabase policies and RPC checks remain authoritative.
 function glurRoleAllowed(p){
  const role=glurAdjustRole;
- if(!role)return p==='dashboard';
+ if(!role)return true;
  if(role==='staff')return ['dashboard','stock','recipes','sales','receiving','closing'].includes(p);
  if(role==='supervisor')return !['team','audit','activity-audit','profit','closing-report','settings'].includes(p);
  return true;
@@ -2367,7 +2367,7 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  const rules={stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
  let ready=false;
  const has=k=>glurAdjustRole==='owner'||(ready&&glurMyPermissions?.[k]===true);
- const can=p=>!rules[p]||rules[p].some(has);
+ const can=p=>!rules[p]||(!ready&&glurAdjustRole!=='owner')||rules[p].some(has);
  const hide=(el,yes)=>{if(el){el.classList.toggle('hidden',yes);if(yes)el.style.setProperty('display','none','important');else el.style.removeProperty('display')}};
  function apply(){
   if(!currentUser)return;
@@ -2385,7 +2385,7 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  const oldRender=render;
  render=function(){if(!can(page)){page='dashboard'}oldRender();apply()};
  const oldLoad=glurLoadMyPermissions;
- glurLoadMyPermissions=async function(){ready=false;await oldLoad();ready=true;apply()};
+ glurLoadMyPermissions=async function(){ready=false;try{await oldLoad()}finally{ready=true;apply()}};
  const oldAuth=showAuthenticated;
  showAuthenticated=function(u){ready=false;oldAuth(u);apply()};
  // Recheck on tab return; avoid showing privileged controls after a role change.
