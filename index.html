@@ -1297,7 +1297,7 @@ function renderGlurSales(){
     const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='กำลังบันทึก…';
     try{
       // Keep the same request ID after a network failure, preventing duplicate sales.
-      const pendingKey='glur_pending_sale_'+GLUR_SHOP_ID;
+      const pendingKey='glur_pending_sale_'+GLUR_SHOP_ID+'_'+(currentUser?.id||'unknown');
       const fingerprint=JSON.stringify([rid,qty,note||'']);
       let pending;
       try{pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null')}catch(_){pending=null}
@@ -1313,7 +1313,7 @@ function renderGlurSales(){
       toast('บันทึกการขายออนไลน์สำเร็จ');
       await Promise.all([loadCloudStock(),loadGlurSales()]);
       if(currentUser&&page==='sales')renderGlurSales();
-    }catch(err){toast('ขายไม่สำเร็จ: '+(err.message||err));button.disabled=false;button.textContent='ยืนยันขายและตัดสต๊อก'}
+    }catch(err){toast('ยังยืนยันผลขายไม่ได้: '+(err.message||err)+' · หากเน็ตหลุด ให้ลองกดรายการเดิมอีกครั้งก่อนสร้างรายการใหม่');button.disabled=false;button.textContent='ยืนยันขายและตัดสต๊อก'}
     finally{glurSalesBusy=false}
   };
 }
