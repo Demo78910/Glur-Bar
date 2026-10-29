@@ -2325,18 +2325,19 @@ function glurMonthlyExportCSV(){
 // Mobile monthly report uses the same data snapshot as the Excel export.
 function glurMonthlyMobileHTML(d){
  const sheets=glurMonthlyWorkbookSheets(d);
- const value=v=>typeof v==='number'?v.toLocaleString('th-TH',{maximumFractionDigits:2}):String(v??'—');
- return sheets.map(section=>{
+ const value=v=>typeof v==='number'?v.toLocaleString('th-TH',{maximumFractionDigits:3}):String(v??'—');
+ return sheets.map((section,index)=>{
   const headers=section.rows[section.headerRow-1];
   const body=section.rows.slice(section.headerRow).filter(row=>row.length>1);
-  return `<details open class="card"><summary>${esc(section.name)}</summary>${body.length?body.map(row=>`<article class="glur-mobile-report-item"><h3>${esc(value(row[0]))}</h3><dl>${headers.slice(1).map((label,i)=>`<div><dt>${esc(label)}</dt><dd>${esc(value(row[i+1]))}</dd></div>`).join('')}</dl></article>`).join(''):'<p>ไม่มีข้อมูลในเดือนนี้</p>'}</details>`;
+  const content=index===0?`<dl class="glur-mobile-summary">${body.map(row=>`<div><dt>${esc(value(row[0]))}</dt><dd>${esc(value(row[1]))} <small>${esc(value(row[2]))}</small></dd></div>`).join('')}</dl><details class="glur-mobile-notes"><summary>คำอธิบายตัวเลข</summary>${body.map(row=>`<p><strong>${esc(value(row[0]))}</strong> · ${esc(value(row[3]))}</p>`).join('')}</details>`:body.map(row=>`<article class="glur-mobile-report-item"><h3>${esc(value(row[0]))}</h3><dl>${headers.slice(1).map((label,i)=>`<div><dt>${esc(label)}</dt><dd>${esc(value(row[i+1]))}</dd></div>`).join('')}</dl></article>`).join('');
+  return `<details ${index===0?'open':''} class="card"><summary>${esc(section.name)}</summary>${body.length?content:'<p>ไม่มีข้อมูลในเดือนนี้</p>'}</details>`;
  }).join('');
 }
 function glurMonthlyOpenMobile(){
  if(!glurMonthlyData)return;
  const previous=document.getElementById('glurMobileReport');if(previous)previous.remove();
  const dialog=document.createElement('dialog');dialog.id='glurMobileReport';
- dialog.innerHTML=`<header><div><strong>GLUR BAR · รายงานอ่านบนมือถือ</strong><div class="small muted">${esc(glurMonthlyData.month||glurMonthlySelected)} · ${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'}</div></div><button type="button" class="btn secondary" data-close>ปิด</button></header><div class="glur-mobile-report-body"><p class="hint">แตะหัวข้อเพื่อพับ/ขยาย · คงเหลือเป็นยอดปัจจุบัน ไม่ใช่ยอดสิ้นเดือนย้อนหลัง · การใช้จากการขายไม่รวม Pre-batch</p>${glurMonthlyMobileHTML(glurMonthlyData)}</div>`;
+ dialog.innerHTML=`<header><div><strong>GLUR BAR · รายงานรายเดือน</strong><div class="small muted">${esc(glurMonthlyData.month||glurMonthlySelected)} · ${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'}</div></div><button type="button" class="btn secondary" data-close>ปิด</button></header><div class="glur-mobile-report-body"><details class="glur-mobile-notes"><summary>หมายเหตุรายงาน</summary><p>คงเหลือเป็นยอดปัจจุบัน ไม่ใช่ยอดสิ้นเดือนย้อนหลัง · การใช้จากการขายไม่รวม Pre-batch · กำไรหักเฉพาะค่าใช้จ่ายที่บันทึก</p></details>${glurMonthlyMobileHTML(glurMonthlyData)}</div>`;
  document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();
  dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
 }
@@ -2362,7 +2363,7 @@ function glurMonthlyExportExcel(){
 function renderReports(){
  if(!glurCanAdjust()){shell('รายงานรายเดือน','<div class="hint warn">เฉพาะ Owner / Manager เท่านั้น</div>');return}
  const m=glurMonthlySelected||glurThaiBusinessToday().slice(0,7);
- shell('สรุปรายงานประจำเดือน',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyMobile">📱 เปิดรายงานอ่านบนมือถือ · ตัวอักษรใหญ่</button><button class="btn secondary full" style="margin-top:10px" id="monthlyExcel">ดาวน์โหลด Excel (.xlsx) · ตารางสำหรับคอมพิวเตอร์</button><button class="btn secondary full" style="margin-top:10px" id="monthlyCSV">ดาวน์โหลด CSV ตารางมาตรฐาน (สำหรับกรองข้อมูล)</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
+ shell('สรุปรายงานประจำเดือน',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyMobile">📱 เปิดรายงานมือถือ · แบบกระชับ</button><button class="btn secondary full" style="margin-top:10px" id="monthlyExcel">ดาวน์โหลด Excel (.xlsx) · ตารางสำหรับคอมพิวเตอร์</button><button class="btn secondary full" style="margin-top:10px" id="monthlyCSV">ดาวน์โหลด CSV ตารางมาตรฐาน (สำหรับกรองข้อมูล)</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
  document.getElementById('reportMonth').onchange=e=>glurMonthlyLoad(e.target.value);
  document.getElementById('monthlyRefresh').onclick=()=>glurMonthlyLoad(document.getElementById('reportMonth').value);
  const mobile=document.getElementById('monthlyMobile');if(mobile)mobile.onclick=glurMonthlyOpenMobile;const b=document.getElementById('monthlyCSV');if(b)b.onclick=glurMonthlyExportCSV;const e=document.getElementById('monthlyExcel');if(e)e.onclick=glurMonthlyExportExcel;
@@ -2627,18 +2628,24 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
 
 </script>
 <style>
-#glurMobileReport{width:100%;max-width:680px;height:100dvh;max-height:100dvh;margin:0 auto;padding:0;border:0;background:#100f0f;color:#f6eee8;overflow:auto;overscroll-behavior:contain;font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+#glurMobileReport{width:100%;max-width:680px;height:100dvh;max-height:100dvh;margin:0 auto;padding:0;border:0;background:#100f0f;color:#f6eee8;overflow:auto;overscroll-behavior:contain;font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #glurMobileReport::backdrop{background:#000b}
-#glurMobileReport>header{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 14px;background:#211a17;border-bottom:1px solid #594032}
-#glurMobileReport .glur-mobile-report-body{padding:14px 12px calc(24px + env(safe-area-inset-bottom))}
-#glurMobileReport summary{font-size:18px;font-weight:750;cursor:pointer;min-height:44px}
-#glurMobileReport .glur-mobile-report-item{border-top:1px solid #40312a;padding:14px 0}
-#glurMobileReport h3{font-size:17px;margin:0 0 12px;overflow-wrap:anywhere}
+#glurMobileReport>header{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:#211a17;border-bottom:1px solid #594032;font-size:13px}
+#glurMobileReport .small{font-size:11px}
+#glurMobileReport .glur-mobile-report-body{padding:6px 10px calc(16px + env(safe-area-inset-bottom))}
+#glurMobileReport .card{padding:8px 10px;margin:8px 0;border-radius:9px}
+#glurMobileReport summary{font-size:14px;font-weight:700;cursor:pointer;min-height:40px;align-content:center}
+#glurMobileReport .glur-mobile-report-item{border-top:1px solid #40312a;padding:7px 0}
+#glurMobileReport h3{font-size:13px;margin:0 0 4px;overflow-wrap:anywhere}
 #glurMobileReport dl{margin:0}
-#glurMobileReport dl>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:6px 0}
+#glurMobileReport dl>div{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:8px;padding:3px 0}
+#glurMobileReport .glur-mobile-summary>div{padding:7px 0;border-top:1px solid #302923}
 #glurMobileReport dt{color:#b4a69b;overflow-wrap:anywhere}
-#glurMobileReport dd{margin:0;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-#glurMobileReport .btn{min-width:60px;min-height:44px}
+#glurMobileReport dd{margin:0;text-align:right;font-weight:650;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#glurMobileReport dd small{font-size:11px;font-weight:400;color:#b4a69b}
+#glurMobileReport .glur-mobile-notes summary{font-size:12px;color:#b4a69b;font-weight:400}
+#glurMobileReport .glur-mobile-notes p{font-size:12px;margin:5px 0;color:#b4a69b}
+#glurMobileReport .btn{min-width:48px;min-height:40px;padding:6px 8px;font-size:13px}
 </style>
 </body>
 </html>
