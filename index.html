@@ -1179,7 +1179,7 @@ render=function(){
 const glurSalesPreviousSetPage=setPage;
 setPage=function(p){glurSalesPreviousSetPage(p);if(p==='sales'){loadGlurSales();if(!recipeCloudReady)loadCloudRecipes()}};
 const glurSalesPreviousShowAuthenticated=showAuthenticated;
-showAuthenticated=function(user){glurAdjustRole='';glurEditingSaleId=null;glurSalesPreviousShowAuthenticated(user);glurLoadAdjustmentAccess().then(()=>loadGlurSales())};
+showAuthenticated=function(user){glurAdjustRole='';glurEditingSaleId=null;glurSalesPreviousShowAuthenticated(user);glurLoadAdjustmentAccess().then(()=>{const wanted=decodeURIComponent(location.hash.slice(1));const target=document.querySelectorAll('#nav button[data-page]');const exists=[...target].some(b=>b.dataset.page===wanted);if(wanted&&exists&&currentUser&&glurRoleAllowed(wanted)){setPage(wanted)}return loadGlurSales()})};
 
 
 // GLUR BAR team administration and stock adjustment audit (cloud)
