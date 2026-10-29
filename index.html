@@ -1918,7 +1918,7 @@ function renderGlurClosingReport(){
 let glurUsageMonth='2026-10',glurUsageData=null,glurUsageBusy=false,glurUsageError='';
 async function glurUsageLoad(month){
  if(GLUR_SHOP_ID!==GLUR_TEST_SHOP_ID)throw Error('รายงานนี้อยู่ใน TEST เท่านั้น');
- if(!/^\\d{4}-\\d{2}$/.test(month))throw Error('เดือนที่เลือกไม่ถูกต้อง');
+ if(!/^\d{4}-\d{2}$/.test(month))throw Error('เดือนที่เลือกไม่ถูกต้อง');
  glurUsageMonth=month;glurUsageBusy=true;glurUsageError='';render();
  try{
   const start=month+'-01',end=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),1)).toISOString().slice(0,10);
