@@ -654,7 +654,7 @@ async function glurLogout(){
 }
 document.getElementById('glurLogout').addEventListener('click',glurLogout);
 function showAuthenticated(user){
-  currentUser=user;try{const h=decodeURIComponent(location.hash.slice(1));const saved=localStorage.getItem('glur_last_page_'+user.id+'_'+GLUR_SHOP_ID);page=[...document.querySelectorAll('#nav button[data-page]')].some(b=>b.dataset.page===h)?h:(saved||'dashboard')}catch(e){page='dashboard'};
+  currentUser=user;try{const raw=decodeURIComponent(location.hash.slice(1));const h=raw.startsWith('page=')?raw.slice(5):raw;const saved=localStorage.getItem('glur_last_page_'+user.id+'_'+GLUR_SHOP_ID);page=[...document.querySelectorAll('#nav button[data-page]')].some(b=>b.dataset.page===h)?h:(saved||'dashboard')}catch(e){page='dashboard'};
   document.getElementById('nav').classList.remove('hidden');
   document.getElementById('glurAccount').classList.remove('hidden');
   document.querySelectorAll('#nav button').forEach(b=>{b.classList.remove('hidden');b.classList.toggle('active',b.dataset.page===page)});
@@ -2433,7 +2433,7 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  showAuthenticated=function(u){
   const newLogin=loginUser!==u.id;
   loginUser=u.id;
-  if(newLogin)pending=hashPage()||sessionStorage.getItem(key())||'';
+  if(newLogin){const raw=decodeURIComponent(location.hash.slice(1));pending=hashPage()||(/^[a-z][a-z0-9-]{0,48}$/.test(raw)?raw:'')||sessionStorage.getItem(key())||localStorage.getItem('glur_last_page_'+u.id+'_'+GLUR_SHOP_ID)||'';}
   priorAuth(u);
   if(pending&&pending!=='dashboard')restore();
  };
