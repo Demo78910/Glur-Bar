@@ -950,7 +950,7 @@ function renderRecipeDetail(){
  document.getElementById('recipeCancel').onclick=()=>{if(fresh)recipeDetailId=null;recipeEditMode=false;renderRecipes()};
  const rows=document.getElementById('cloudIngredientRows');
  function addRow(stockId='',qty=''){const div=document.createElement('div');div.className='ingredient-row glur-recipe-ingredient';div.innerHTML=`<select aria-label="วัตถุดิบ" required><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select><div class="glur-ingredient-bottom"><input aria-label="ปริมาณ" placeholder="ปริมาณที่ใช้" type="number" step="any" min="0.000001" required value="${esc(qty)}"><button type="button" class="btn danger smallbtn" aria-label="ลบส่วนผสม">×</button></div>`;div.querySelector('button').onclick=()=>div.remove();rows.appendChild(div)}
- (r.ingredients||[]).forEach(i=>addRow(i.stock_id,i.quantity));if(!(r.ingredients||[]).length)addRow();
+ (r.ingredients||[]).forEach(i=>addRow(i.stock_id,i.quantity));
  document.getElementById('recipeAddIng').onclick=()=>addRow();const getNonstock=nsEditor('recipeNonstockRows','recipeAddNonstock',r.nonstock||[]);
  document.getElementById('recipeCloudForm').onsubmit=async e=>{
   e.preventDefault();const btn=document.getElementById('recipeSave');btn.disabled=true;
@@ -970,7 +970,7 @@ function renderRecipeDetail(){
     payload.image_path=imageKey;
    }
 
-   const ings=[...rows.children].map(el=>({stock_id:el.children[0].value,quantity:Number(el.children[1].value)}));
+   const ings=[...rows.children].map(el=>({stock_id:el.querySelector('select').value,quantity:Number(el.querySelector('input[type=number]').value)}));
    const extras=getNonstock();if((!ings.length&&!extras.length)||ings.some(i=>!i.stock_id||!Number.isFinite(i.quantity)||i.quantity<=0))throw Error('เพิ่มส่วนผสมและปริมาณที่ถูกต้องอย่างน้อยหนึ่งรายการ');
    if(new Set(ings.map(i=>i.stock_id)).size!==ings.length)throw Error('วัตถุดิบซ้ำกัน กรุณารวมปริมาณเป็นแถวเดียว');
    let rid=r.id;
