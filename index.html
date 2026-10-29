@@ -2393,49 +2393,53 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  window.glurApplyPermissionVisibility=apply;
 })();
 
-// Persist navigation immediately, then restore after role + permission loading.
+// Stable navigation: URL hash is the source of truth; restore after async access loads.
 (function(){
  const key=()=> 'glur_last_page_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE');
  const valid=p=>typeof p==='string'&&/^[a-z][a-z0-9-]{0,48}$/.test(p);
- let pending='',booting=false;
- const priorSet=setPage;
+ const hashPage=()=>{const m=location.hash.match(/^#page=([a-z][a-z0-9-]{0,48})$/);return m?m[1]:''};
+ let pending='',restoring=false,loginUser='';
+ const save=p=>{
+  if(!valid(p))return;
+  sessionStorage.setItem(key(),p);
+  if(location.hash!=='#page='+p)history.replaceState(null,'',location.pathname+location.search+'#page='+p);
+ };
+ const previousSet=setPage;
  setPage=function(p){
-  priorSet(p);
-  if(!booting&&currentUser&&page===p&&valid(p))sessionStorage.setItem(key(),p);
+  previousSet(p);
+  if(!restoring&&currentUser&&page===p)save(p);
  };
- const tryRestore=()=>{
+ const restore=()=>{
   if(!pending||!currentUser||!glurAdjustRole)return;
-  const p=pending;
-  const roleOK=typeof glurRoleAllowed!=='function'||glurRoleAllowed(p);
-  const financeOK=!['profit','closing-report'].includes(p)||glurCanAdjust();
-  if(!roleOK||!financeOK){pending='';booting=false;sessionStorage.removeItem(key());return}
-  // Permission loader has finished; normal setPage applies all UI guards.
-  pending='';booting=false;
-  setPage(p);
-  if(page!==p)sessionStorage.removeItem(key());
+  const desired=pending;
+  if(typeof glurRoleAllowed==='function'&&!glurRoleAllowed(desired)){pending='';return}
+  if(['profit','closing-report'].includes(desired)&&typeof glurCanAdjust==='function'&&!glurCanAdjust())return;
+  restoring=true;
+  previousSet(desired);
+  restoring=false;
+  if(page===desired){pending='';save(desired)}
  };
- const priorLoadAccess=glurLoadAdjustmentAccess;
+ const priorAccess=glurLoadAdjustmentAccess;
  glurLoadAdjustmentAccess=async function(...args){
-  const result=await priorLoadAccess.apply(this,args);
-  tryRestore();
-  return result;
+  const result=await priorAccess.apply(this,args);
+  restore();return result;
  };
- const priorLoadPermissions=glurLoadMyPermissions;
+ const priorPermissions=glurLoadMyPermissions;
  glurLoadMyPermissions=async function(...args){
-  const result=await priorLoadPermissions.apply(this,args);
-  tryRestore();
-  return result;
+  const result=await priorPermissions.apply(this,args);
+  restore();return result;
  };
  const priorAuth=showAuthenticated;
  showAuthenticated=function(u){
-  pending=sessionStorage.getItem(key())||'';
-  booting=!!pending&&pending!=='dashboard'&&valid(pending);
+  const newLogin=loginUser!==u.id;
+  loginUser=u.id;
+  if(newLogin)pending=hashPage()||sessionStorage.getItem(key())||'';
   priorAuth(u);
-  if(!booting){pending='';return}
-  // On auth restore, role load is asynchronous. Avoid overwriting saved page.
-  if(glurAdjustRole)tryRestore();
+  if(pending&&pending!=='dashboard')restore();
  };
- window.addEventListener('pagehide',()=>{if(currentUser&&!booting&&valid(page))sessionStorage.setItem(key(),page)});
+ // A hard refresh must not rewrite the remembered destination to dashboard.
+ window.addEventListener('pagehide',()=>{if(currentUser&&!pending&&valid(page))save(page)});
+ window.addEventListener('hashchange',()=>{const target=hashPage();if(target&&currentUser){pending=target;restore()}});
 })();
 
 </script>
