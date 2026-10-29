@@ -2291,7 +2291,7 @@ function glurMonthlyTables(d){
  const revenue=Number(s.revenue||0),cogs=Number(s.cogs||0),exp=Number(s.expenses||0);
  const menuBody=menus.length?menus.map((x,j)=>line(`${j+1}. ${x.menu_name||'ไม่ระบุชื่อเมนู'}`,n(x.drinks)+' แก้ว',`ยอดขาย ${amount(x.revenue)}`)).join(''):empty('ยังไม่มีเมนูที่ขายในเดือนนี้');
  const ingBody=ings.length?ings.map(x=>line(x.stock_name||'ไม่ระบุวัตถุดิบ',n(x.used_quantity)+' '+(x.unit||''))).join(''):empty('ไม่มีข้อมูลการใช้วัตถุดิบจากการขาย');
- const stockBody=stocks.length?stocks.map(x=>`<div style="padding:10px 0;border-bottom:1px solid var(--line,rgba(128,128,128,.2))"><strong>${esc(x.stock_name||'ไม่ระบุชื่อ')}</strong><div class="small muted">หน่วย: ${esc(x.unit||'-')}</div>${line('รับเข้า',n(x.received_quantity))}${line('ใช้ขาย',n(x.sold_usage_quantity))}${line('บันทึกใช้จริง',n(x.manual_recorded_quantity))}${line('ปรับแก้คืนสต๊อก (+) / ตัดเพิ่ม (−)',(Number(x.manual_correction_quantity||0)>0?'+':'')+n(x.manual_correction_quantity))}${line('ใช้จริงสุทธิ',n(x.manual_usage_quantity))}${line('ของเสีย',n(x.waste_quantity))}${line('คงเหลือตอนนี้',n(x.current_quantity))}</div>`).join(''):empty('ไม่มีรายการสต็อก');
+ const stockBody=stocks.length?stocks.map(x=>`<div style="padding:10px 0;border-bottom:1px solid var(--line,rgba(128,128,128,.2))"><strong>${esc(x.stock_name||'ไม่ระบุชื่อ')}</strong><div class="small muted">หน่วย: ${esc(x.unit||'-')}</div>${line('ยอดยกมาต้นเดือน (ประมาณ)',x.opening_quantity===null?'ไม่มีข้อมูลย้อนหลังที่ยืนยันได้':n(x.opening_quantity))}${line('รับเข้า',n(x.received_quantity))}${line('ใช้ขาย',n(x.sold_usage_quantity))}${line('บันทึกใช้จริง',n(x.manual_recorded_quantity))}${line('ปรับแก้คืนสต๊อก (+) / ตัดเพิ่ม (−)',(Number(x.manual_correction_quantity||0)>0?'+':'')+n(x.manual_correction_quantity))}${line('ใช้จริงสุทธิ',n(x.manual_usage_quantity))}${line('ของเสีย',n(x.waste_quantity))}${line('คงเหลือตอนนี้',n(x.current_quantity))}</div>`).join(''):empty('ไม่มีรายการสต็อก');
  const receiptBody=receipts.length?receipts.map(x=>line(x.stock_name||'ไม่ระบุชื่อ',n(x.quantity)+' '+(x.unit||''),`มูลค่ารับเข้า ${amount(x.total_cost)}`)).join(''):empty('ไม่มีรายการรับเข้าในเดือนนี้');
  return `<div class="small muted" style="margin-bottom:12px">สรุปตัวเลขสำคัญก่อน · แตะหัวข้อด้านล่างเพื่อดูรายละเอียด</div>
  <div class="grid">${metric('ยอดขายทั้งหมด',amount(revenue))}${metric('กำไรขั้นต้น',amount(revenue-cogs))}${metric('จำนวนแก้วที่ขาย',n(s.drinks)+' แก้ว')}${metric('กำไรหลังหักค่าใช้จ่ายที่บันทึก',amount(revenue-cogs-exp))}</div>
@@ -2340,6 +2340,14 @@ async function glurMonthlyLoad(m){
    const t=movementTotals.get(x.stock_id)||{recorded:0,correction:0};
    return {...x,manual_recorded_quantity:t.recorded,manual_correction_quantity:t.correction,manual_usage_quantity:t.recorded-t.correction};
   }).filter(x=>Number(x.sold_usage_quantity||0)!==0||Number(x.waste_quantity||0)!==0||Number(x.manual_recorded_quantity||0)!==0||Number(x.manual_correction_quantity||0)!==0);
+  // Opening balance is reconstructed only for the active month; historical current stock cannot reconstruct past closing balances.
+  const currentBangkokMonth=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit'}).format(new Date()).replace('/','-');
+  const isCurrentMonth=m===currentBangkokMonth;
+  report.stock=report.stock.map(x=>{
+   const received=Number(x.received_quantity||0),sold=Number(x.sold_usage_quantity||0),manual=Number(x.manual_usage_quantity||0),waste=Number(x.waste_quantity||0);
+   const opening=isCurrentMonth?Number(x.current_quantity||0)-received+sold+manual+waste:null;
+   return {...x,opening_quantity:opening,opening_estimated:isCurrentMonth};
+  });
   glurMonthlyData=report;
  }catch(e){glurMonthlyError=e.message||String(e)}finally{glurMonthlyBusy=false;if(page==='reports')renderReports()}
 }
@@ -2363,7 +2371,7 @@ function glurMonthlyWorkbookSheets(d){
    ['คำอธิบายเพิ่มเติม'],
    ['1. ยอดคงเหลือในชีตสต็อกคือยอดปัจจุบัน ไม่ใช่ยอดสิ้นเดือนย้อนหลัง'],
    ['2. การใช้วัตถุดิบจากการขายไม่รวม Pre-batch'],
-   ['3. ใช้จริงสุทธิ = บันทึกใช้จริง − ปรับแก้ (+ คืนสต๊อก / − ตัดเพิ่ม)'],['4. ต้นทุนและกำไรขึ้นอยู่กับข้อมูลที่บันทึกจริงในระบบ']
+   ['3. ใช้จริงสุทธิ = บันทึกใช้จริง − ปรับแก้ (+ คืนสต๊อก / − ตัดเพิ่ม)'],['4. ยอดยกมาเป็นค่าคำนวณประมาณของเดือนปัจจุบัน ไม่ใช่ยอดตรวจนับที่ยืนยันแล้ว'],['5. เดือนย้อนหลังไม่แสดงยอดยกมาหากไม่มี Snapshot ที่ยืนยันได้'],['6. ต้นทุนและกำไรขึ้นอยู่กับข้อมูลที่บันทึกจริงในระบบ']
   ]},
   {name:'02 เมนูขายออก',headerRow:3,rows:[
    ['GLUR BAR | รายละเอียดเมนูขายออก'],['เดือน',month],
@@ -2377,9 +2385,9 @@ function glurMonthlyWorkbookSheets(d){
    ...i.map(x=>[x.stock_name,x.unit,num(x.used_quantity),num(x.ingredient_cost),num(x.sale_transactions)])
   ]},
   {name:'04 สต็อก',headerRow:4,rows:[
-   ['GLUR BAR | การเคลื่อนไหวสต็อก'],['เดือน',month],['สำคัญ','คงเหลือเป็นยอดปัจจุบัน ไม่ใช่ยอดสิ้นเดือนย้อนหลัง'],
-   ['วัตถุดิบ','หน่วย','รับเข้าในเดือน','ใช้จากการขาย','บันทึกใช้จริง','ปรับแก้ (+คืน / −ตัดเพิ่ม)','ใช้จริงสุทธิ','ของเสีย','คงเหลือปัจจุบัน'],
-   ...st.map(x=>[x.stock_name,x.unit,num(x.received_quantity),num(x.sold_usage_quantity),num(x.manual_recorded_quantity),num(x.manual_correction_quantity),num(x.manual_usage_quantity),num(x.waste_quantity),num(x.current_quantity)])
+   ['GLUR BAR | การเคลื่อนไหวสต็อก'],['เดือน',month],['สำคัญ','ยอดยกมาเป็นค่าประมาณเฉพาะเดือนปัจจุบัน; คงเหลือเป็นยอดปัจจุบัน ไม่ใช่ยอดสิ้นเดือนย้อนหลัง'],
+   ['วัตถุดิบ','หน่วย','ยอดยกมา (ประมาณ)','รับเข้าในเดือน','ใช้จากการขาย','บันทึกใช้จริง','ปรับแก้ (+คืน / −ตัดเพิ่ม)','ใช้จริงสุทธิ','ของเสีย','คงเหลือปัจจุบัน'],
+   ...st.map(x=>[x.stock_name,x.unit,x.opening_quantity===null?'':num(x.opening_quantity),num(x.received_quantity),num(x.sold_usage_quantity),num(x.manual_recorded_quantity),num(x.manual_correction_quantity),num(x.manual_usage_quantity),num(x.waste_quantity),num(x.current_quantity)])
   ]},
   {name:'05 รับสินค้า',headerRow:3,rows:[
    ['GLUR BAR | รายการรับสินค้า'],['เดือน',month],
@@ -2399,7 +2407,7 @@ function glurMonthlyExportCSV(){
  [['ยอดขายทั้งหมด',s.revenue,'บาท'],['ต้นทุนเครื่องดื่ม',s.cogs,'บาท'],['กำไรขั้นต้น',Number(s.revenue||0)-Number(s.cogs||0),'บาท'],['ค่าใช้จ่ายที่บันทึก',s.expenses,'บาท'],['กำไรหลังหักค่าใช้จ่ายที่บันทึก',Number(s.revenue||0)-Number(s.cogs||0)-Number(s.expenses||0),'บาท'],['จำนวนแก้ว',s.drinks,'แก้ว'],['จำนวนรายการขาย',s.transactions,'รายการ']].forEach(x=>put('ภาพรวม','ทั้งร้าน',...x));
  (d.menus||[]).forEach(x=>{put('เมนูขายออก',x.menu_name,'จำนวนแก้ว',x.drinks,'แก้ว');put('เมนูขายออก',x.menu_name,'ยอดขาย',x.revenue,'บาท');put('เมนูขายออก',x.menu_name,'ต้นทุน',x.cost,'บาท')});
  (d.ingredients||[]).forEach(x=>{put('วัตถุดิบที่ใช้',x.stock_name,'ใช้จากการขาย',x.used_quantity,x.unit||'');put('วัตถุดิบที่ใช้',x.stock_name,'ต้นทุน',x.ingredient_cost,'บาท')});
- (d.stock||[]).forEach(x=>{[['รับเข้า',x.received_quantity],['ใช้จากการขาย',x.sold_usage_quantity],['บันทึกใช้จริง',x.manual_recorded_quantity],['ปรับแก้ (+คืน / −ตัดเพิ่ม)',x.manual_correction_quantity],['ใช้จริงสุทธิ',x.manual_usage_quantity],['ของเสีย',x.waste_quantity],['คงเหลือปัจจุบัน (ไม่ใช่สิ้นเดือน)',x.current_quantity]].forEach(y=>put('สต็อก',x.stock_name,y[0],y[1],x.unit||''))});
+ (d.stock||[]).forEach(x=>{[['ยอดยกมา (ประมาณ)',x.opening_quantity===null?'':x.opening_quantity],['รับเข้า',x.received_quantity],['ใช้จากการขาย',x.sold_usage_quantity],['บันทึกใช้จริง',x.manual_recorded_quantity],['ปรับแก้ (+คืน / −ตัดเพิ่ม)',x.manual_correction_quantity],['ใช้จริงสุทธิ',x.manual_usage_quantity],['ของเสีย',x.waste_quantity],['คงเหลือปัจจุบัน (ไม่ใช่สิ้นเดือน)',x.current_quantity]].forEach(y=>put('สต็อก',x.stock_name,y[0],y[1],x.unit||''))});
  (d.receipts||[]).forEach(x=>{put('รับสินค้า',x.stock_name,'ปริมาณรับเข้า',x.quantity,x.unit||'');put('รับสินค้า',x.stock_name,'มูลค่ารับเข้า',x.total_cost,'บาท')});
  glurMonthlySaveCSV('GLUR_Monthly_Data_'+month+'.csv',rows);
 }
