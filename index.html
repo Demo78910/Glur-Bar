@@ -475,7 +475,7 @@ async function glurShowDetailMovementHistory(stockId){
  }catch(e){if(host.isConnected)host.textContent='โหลดประวัติไม่สำเร็จ: '+e.message}
 }
 function renderManualConsumption(){
- if(!glurCanAdjust()){toast('เฉพาะ Owner / Manager');return}
+ if(!['owner','manager','staff'].includes(glurAdjustRole)){toast('ไม่มีสิทธิ์บันทึกการใช้');return}
  shell('ตัดใช้วัตถุดิบ',`<button class="back-link" id="manualBack">‹ กลับหน้าสต๊อก</button><div class="card"><h3>ตัดใช้ผลไม้ / ของแต่งแก้ว</h3><div class="small muted">บันทึกจำนวนที่ใช้จริงแยกจากการขาย ไม่ใช่ของเสีย · ตัดสต๊อกทันที</div><form id="manualConsumptionForm" class="stack"><div class="field"><label>วัตถุดิบ</label><select name="stock_id" required>${cloudStock.map(x=>`<option value="${esc(x.id)}">${esc(x.name)} · ${num(x.quantity)} ${esc(x.unit)}</option>`).join('')}</select></div><div class="field"><label>จำนวนที่ใช้จริง (ตามหน่วยสต๊อก)</label><input name="quantity" type="number" min="0.000001" step="any" required></div><div class="field"><label>ใช้ทำอะไร</label><select name="purpose"><option value="garnish">แต่งแก้ว</option><option value="juice">คั้นน้ำ</option><option value="prep">เตรียมวัตถุดิบ</option><option value="other">ใช้งานอื่น</option></select></div><div class="field"><label>รายละเอียดการใช้ (ถ้ามี)</label><textarea name="note" rows="2"></textarea></div><button class="btn full" type="submit">ยืนยันตัดใช้จริง</button></form></div>`);
  document.getElementById('manualBack').onclick=renderStock;
  document.getElementById('manualConsumptionForm').onsubmit=async e=>{
