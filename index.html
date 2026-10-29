@@ -2617,6 +2617,9 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
   if(location.hash!=='#page='+p)history.replaceState(null,'',location.pathname+location.search+'#page='+p);
  };
  const previousSet=setPage;
+ // Keep the requested page during login; permission checks will validate it after loading.
+ const initialHash=hashPage();
+ if(initialHash)sessionStorage.setItem(key(),initialHash);
  setPage=function(p){
   previousSet(p);
   if(!restoring&&currentUser&&page===p)save(p);
@@ -2624,7 +2627,7 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
  const restore=()=>{
   if(!pending||!currentUser||!glurAdjustRole)return;
   const desired=pending;
-  if(typeof glurRoleAllowed==='function'&&!glurRoleAllowed(desired)){pending='';return}
+  if(typeof glurRoleAllowed==='function'&&!glurRoleAllowed(desired))return
   if(['profit','closing-report'].includes(desired)&&typeof glurCanAdjust==='function'&&!glurCanAdjust())return;
   restoring=true;
   previousSet(desired);
