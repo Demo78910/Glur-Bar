@@ -402,7 +402,7 @@ function glurShowFailure(message){
 function toast(msg){const text=String(msg??'');const t=document.getElementById('toast');t.textContent=text;t.classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.add('hidden'),3600);if(/ไม่สำเร็จ|ไม่ได้|ไม่สามารถ|ผิดพลาด|ไม่ถูกต้อง|ไม่มีสิทธิ์|สต๊อกไม่พอ|กรุณา|ล้มเหลว|error:/i.test(text))glurShowFailure(text)}
 window.addEventListener('unhandledrejection',event=>{const msg=event.reason?.message||String(event.reason||'ข้อผิดพลาดที่ไม่ทราบสาเหตุ');glurShowFailure('เกิดข้อผิดพลาดระหว่างติดต่อระบบ: '+msg)});
 window.addEventListener('error',event=>{if(event.message)glurShowFailure('เกิดข้อผิดพลาดในการทำงานของหน้าเว็บ: '+event.message)});
-function setPage(p){if(!currentUser)return;page=p;try{localStorage.setItem('glur_last_page_'+currentUser.id+'_'+GLUR_SHOP_ID,p)}catch(e){}document.querySelectorAll('#nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===p));render()}
+function setPage(p){if(!currentUser)return;page=p;try{localStorage.setItem('glur_last_page_'+currentUser.id+'_'+GLUR_SHOP_ID,p)}catch(e){}if(location.hash!=='#'+encodeURIComponent(p))history.replaceState(null,'','#'+encodeURIComponent(p));document.querySelectorAll('#nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===p));render()}
 document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)setPage(b.dataset.page)});
 function stockById(sid){return db.stock.find(s=>s.id===sid)}
 function recipeCost(r){return (r.ingredients||[]).reduce((sum,x)=>{const s=stockById(x.stockId);return sum+(s?num(x.qty)*num(s.cost):0)},0)}
@@ -654,7 +654,7 @@ async function glurLogout(){
 }
 document.getElementById('glurLogout').addEventListener('click',glurLogout);
 function showAuthenticated(user){
-  currentUser=user;try{page=localStorage.getItem('glur_last_page_'+user.id+'_'+GLUR_SHOP_ID)||'dashboard'}catch(e){page='dashboard'};
+  currentUser=user;try{const fromHash=decodeURIComponent(location.hash.slice(1));const fromSaved=localStorage.getItem('glur_last_page_'+user.id+'_'+GLUR_SHOP_ID);page=(fromHash&&document.querySelector('#nav button[data-page="'+CSS.escape(fromHash)+'"]'))?fromHash:(fromSaved||'dashboard')}catch(e){page='dashboard'};
   document.getElementById('nav').classList.remove('hidden');
   document.getElementById('glurAccount').classList.remove('hidden');
   document.querySelectorAll('#nav button').forEach(b=>{b.classList.remove('hidden');b.classList.toggle('active',b.dataset.page===page)});
@@ -2145,7 +2145,7 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  const oldSet=setPage;
  setPage=function(p){if(!can(p)){toast('บัญชีนี้ไม่ได้รับสิทธิ์เข้าหน้านี้');return}oldSet(p);apply()};
  const oldRender=render;
- render=function(){if(!can(page)){page='dashboard'}oldRender();apply()};
+ render=function(){if(!can(page)){page='dashboard'}oldRender();document.querySelectorAll('#nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));apply()};
  const oldLoad=glurLoadMyPermissions;
  glurLoadMyPermissions=async function(){ready=false;try{await oldLoad()}finally{ready=true;apply()}};
  const oldAuth=showAuthenticated;
