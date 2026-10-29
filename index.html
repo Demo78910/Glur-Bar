@@ -1294,10 +1294,20 @@ function renderGlurSales(){
     glurSalesBusy=true;
     const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='กำลังบันทึก…';
     try{
-      const {error}=await glurSupabase.rpc('glur_record_sale_v2',{
-        p_shop_id:GLUR_SHOP_ID,p_recipe_id:rid,p_quantity:qty,p_note:note||null
+      // Keep the same request ID after a network failure, preventing duplicate sales.
+      const pendingKey='glur_pending_sale_'+GLUR_SHOP_ID;
+      const fingerprint=JSON.stringify([rid,qty,note||'']);
+      let pending;
+      try{pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null')}catch(_){pending=null}
+      if(!pending||pending.fingerprint!==fingerprint){
+        pending={fingerprint,key:crypto.randomUUID()};
+        sessionStorage.setItem(pendingKey,JSON.stringify(pending));
+      }
+      const {data:saleId,error}=await glurSupabase.rpc('glur_record_sale_safe',{
+        p_shop_id:GLUR_SHOP_ID,p_recipe_id:rid,p_quantity:qty,p_note:note||null,p_request_key:pending.key
       });
       if(error)throw error;
+      sessionStorage.removeItem(pendingKey);
       toast('บันทึกการขายออนไลน์สำเร็จ');
       await Promise.all([loadCloudStock(),loadGlurSales()]);
       if(currentUser&&page==='sales')renderGlurSales();
