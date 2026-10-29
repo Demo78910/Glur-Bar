@@ -467,7 +467,7 @@ async function glurShowDetailMovementHistory(stockId){
   if(!host.isConnected||stockDetailId!==stockId)return;
   if(m.error||r.error){host.innerHTML='<div class="warn">โหลดประวัติไม่สำเร็จ: '+esc(m.error?.message||r.error?.message)+'</div>';return}
   const userIds=[...new Set((m.data||[]).map(x=>x.created_by).filter(Boolean))];
-  let names={};if(userIds.length){const {data:people,error:peopleError}=await glurSupabase.rpc('glur_employee_profiles_list',{p_shop_id:GLUR_SHOP_ID});if(!peopleError){for(const person of people||[]){if(userIds.includes(person.user_id)&&String(person.display_name||'').trim())names[person.user_id]=String(person.display_name).trim();}}}
+  let names={};if(userIds.length){const {data:people,error:peopleError}=await glurSupabase.rpc('glur_stock_actor_names',{p_shop_id:GLUR_SHOP_ID});if(!peopleError){for(const person of people||[]){if(userIds.includes(person.user_id)&&String(person.display_name||'').trim())names[person.user_id]=String(person.display_name).trim();}}}
   const refs=new Set((m.data||[]).map(x=>String(x.reference_id||'')));
   const rows=[...(m.data||[]).map(x=>({date:x.created_at,type:x.movement_type||'ปรับยอด',delta:Number(x.quantity_change),before:x.quantity_before,after:x.quantity_after,reason:x.reason||'',actor:x.created_by,rawType:x.movement_type})),
    ...(r.data||[]).filter(x=>!refs.has(String(x.id))).map(x=>({date:x.received_at,type:'รับสต๊อก',delta:Number(x.quantity),reason:'ประวัติรับเข้า'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));
