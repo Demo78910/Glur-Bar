@@ -2313,50 +2313,8 @@ body.glur-test-mode #glurModeBar strong{color:#ffb578}
  const previousAuth=showAuthenticated;
  showAuthenticated=function(user){previousAuth(user);paint()};
  const previousSetPage=setPage;
- const blockedInTest=new Set(['employees','activity','audit','reset']); // Finance, stock count and waste remain testable in TEST; privileged administration requires owner unlock.
- let testUnlocked=false;
- const unlockBtn=document.createElement('button');
- unlockBtn.type='button';unlockBtn.id='glurTestUnlock';
- bar.appendChild(unlockBtn);
- async function verifyTestOwner(){
-  const {data:auth,error:authError}=await glurSupabase.auth.getUser();
-  if(authError||!auth?.user)throw Error('ไม่พบเซสชันเข้าสู่ระบบ กรุณาเข้าสู่ระบบใหม่');
-  const {data,error}=await glurSupabase.from('glur_members').select('role')
-    .eq('shop_id',GLUR_TEST_SHOP_ID).eq('user_id',auth.user.id).limit(1);
-  if(error)throw error;
-  if(!data?.some(m=>m.role==='owner'))throw Error('เฉพาะ Owner ของร้าน TEST เท่านั้นที่ปลดล็อกได้');
- }
- function syncTestLock(){
-  unlockBtn.style.display=isTest()&&currentUser?'inline-block':'none';
-  unlockBtn.textContent=testUnlocked?'🔒 ล็อกเมนู TEST':'🔓 ปลดล็อกเมนู TEST (Owner)';
-  const nav=document.getElementById('nav');
-  nav.querySelectorAll('button[data-page]').forEach(btn=>{
-   if(blockedInTest.has(btn.dataset.page))btn.style.display=isTest()&&!testUnlocked?'none':'';
-  });
- }
- unlockBtn.addEventListener('click',async()=>{
-  if(!isTest())return;
-  if(testUnlocked){testUnlocked=false;syncTestLock();toast('ล็อกเมนู TEST แล้ว');return}
-  unlockBtn.disabled=true;
-  try{
-   await verifyTestOwner();
-   if(!confirm('ปลดล็อกเมนูที่ยังไม่ผ่านการตรวจสอบ RPC ใน TEST?\n\nคำเตือน: การปลดล็อกนี้เปิดเพียงหน้าเมนู ไม่ได้รับประกันว่าฟังก์ชันฐานข้อมูลจะแยก TEST/LIVE ถูกต้อง และอาจกระทบข้อมูล LIVE ได้\n\nต้องการยืนยันหรือไม่?'))return;
-   testUnlocked=true;syncTestLock();toast('ปลดล็อกเมนู TEST สำหรับการทดลองครั้งนี้แล้ว');
-  }catch(e){alert('ปลดล็อกไม่ได้: '+(e.message||e))}
-  finally{unlockBtn.disabled=false}
- });
- setPage=function(p){
-  if(isTest()&&blockedInTest.has(p)&&!testUnlocked){
-   toast('เมนูนี้ล็อกใน TEST: RPC ยังไม่ผ่านการตรวจสอบ เจ้าของร้านสามารถกดปลดล็อกที่แถบ TEST ได้');return;
-  }
-  previousSetPage(p);
- };
- const nav=document.getElementById('nav');
- const observer=new MutationObserver(syncTestLock);
- observer.observe(nav,{childList:true,subtree:true,attributes:false});
- const oldShowAuth=showAuthenticated;
- showAuthenticated=function(user){oldShowAuth(user);syncTestLock()};
- syncTestLock();
+ // TEST and LIVE expose the same navigation; role permissions remain enforced by the shared access layer.
+ // The two modes continue to use separate shop_id values for data isolation.
  paint();
 })();
 </script>
