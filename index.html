@@ -1388,7 +1388,7 @@ function renderGlurTeam(){
       <form id="glurTeamCreate" class="stack" autocomplete="off">
         <div class="field"><label>Username (a-z, 0-9, _ ความยาว 3–30)</label><input name="username" required minlength="3" maxlength="30" pattern="[a-z0-9_]{3,30}" autocapitalize="off" autocomplete="off"></div>
         <div class="field"><label>ชื่อพนักงาน (แสดงในรายงาน)</label><input name="display_name" required maxlength="100"></div>
-        <div class="field"><label>รหัสผ่านเริ่มต้น (อย่างน้อย 12 ตัว)</label><input name="password" type="password" minlength="12" maxlength="128" required autocomplete="new-password"></div>
+        <div class="field"><label>รหัสผ่านเริ่มต้น (อย่างน้อย 8 ตัว)</label><input name="password" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
         <div class="field"><label>ตำแหน่ง</label><select name="role"><option value="staff">Staff · พนักงาน</option>${glurAdjustRole==='owner'?'<option value="manager">Manager · ผู้จัดการ</option>':''}<option value="supervisor">Supervisor · หัวหน้างาน</option></select></div>
         <button type="submit" class="btn full" ${glurTeamBusy?'disabled':''}>สร้างบัญชีพนักงาน</button>
       </form></div>
@@ -1401,7 +1401,7 @@ function renderGlurTeam(){
   document.getElementById('glurTeamCreate').onsubmit=async e=>{
     e.preventDefault();if(glurTeamBusy)return;const form=e.currentTarget;
     const username=form.elements.username.value.trim(),password=form.elements.password.value,role=form.elements.role.value,displayName=form.elements.display_name.value.trim();
-    if(!/^[a-z0-9_]{3,30}$/.test(username)||password.length<12||!displayName||displayName.length>100){toast('ตรวจสอบ Username และรหัสผ่าน');return}
+    if(!/^[a-z0-9_]{3,30}$/.test(username)||password.length<8||!displayName||displayName.length>100){toast('ตรวจสอบ Username และรหัสผ่าน');return}
     if(!confirm('ยืนยันสร้างบัญชี '+username+' ('+role+') ?'))return;
     glurTeamBusy=true;form.querySelector('button[type=submit]').disabled=true;
     try{await glurManageUsers('create',{username,password,role});await glurLoadTeam();const created=glurTeamMembers.find(m=>m.username===username);if(!created)throw Error('สร้างบัญชีแล้ว แต่ค้นหาไอดีเพื่อบันทึกชื่อไม่พบ กรุณาแก้ชื่อจากรายชื่อพนักงาน');const {error:profileError}=await glurSupabase.rpc('glur_employee_profile_set',{p_shop_id:GLUR_SHOP_ID,p_user_id:created.user_id,p_display_name:displayName});if(profileError)throw profileError;toast('สร้างบัญชีและบันทึกชื่อสำเร็จ');await glurLoadTeam()}
