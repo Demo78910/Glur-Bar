@@ -446,7 +446,7 @@ async function glurStockHistory(id){
  ]);
  if(!p.isConnected)return;
  const refs=new Set((a.data||[]).map(x=>String(x.reference_id||'')));
- const rows=[...(a.data||[]).map(x=>({date:x.created_at,label:x.movement_type||'ปรับยอด',change:+x.quantity_change,before:x.quantity_before,after:x.quantity_after,detail:x.reason||''})),
+ const rows=[...(a.data||[]).map(x=>({date:x.created_at,label:x.movement_type==='sale_adjustment'?'ปรับใช้จริงจากการขาย':x.movement_type==='sale'?'ขาย · ตัดสต๊อก':(x.movement_type||'ปรับยอด'),change:+x.quantity_change,before:x.quantity_before,after:x.quantity_after,detail:x.reason||''})),
  ...(b.data||[]).filter(x=>!refs.has(String(x.id))).map(x=>({date:x.received_at,label:'รับสต๊อก',change:+x.quantity})),
  ...(c.data||[]).filter(x=>!refs.has(String(x.sale_id))).map(x=>({date:x.created_at,label:'ขาย '+(x.glur_sales?.recipe_name||''),change:-Number(x.quantity_used)}))].sort((x,y)=>new Date(y.date)-new Date(x.date));
  const f=n=>Number(n).toLocaleString('th-TH',{maximumFractionDigits:3});
@@ -472,10 +472,10 @@ async function glurShowDetailMovementHistory(stockId){
   const refs=new Set((m.data||[]).map(x=>String(x.reference_id||'')));
   const rows=[...(m.data||[]).map(x=>({date:x.created_at,type:x.movement_type||'ปรับยอด',delta:Number(x.quantity_change),before:x.quantity_before,after:x.quantity_after,reason:x.reason||'',actor:x.created_by,rawType:x.movement_type})),
    ...(r.data||[]).filter(x=>!refs.has(String(x.id))).map(x=>({date:x.received_at,type:'รับสต๊อก',delta:Number(x.quantity),reason:'ประวัติรับเข้า'})),
-   ...(adjust.data||[]).map(x=>({date:x.created_at,type:'ปรับใช้จริงจากการขาย',delta:Number(x.quantity_before)-Number(x.quantity_after),before:null,after:null,reason:'ใช้จริง '+x.quantity_before+' → '+x.quantity_after+' '+stock.unit+' · '+(x.reason||'ไม่ระบุเหตุผล'),actor:x.adjusted_by,rawType:'sale_adjustment'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));
+   ...(adjust.data||[]).filter(x=>!(m.data||[]).some(y=>y.movement_type==='sale_adjustment'&&String(y.reference_id)===String(x.id))).map(x=>({date:x.created_at,type:'ปรับใช้จริงจากการขาย',delta:Number(x.quantity_before)-Number(x.quantity_after),before:null,after:null,reason:'ใช้จริง '+x.quantity_before+' → '+x.quantity_after+' '+stock.unit+' · '+(x.reason||'ไม่ระบุเหตุผล'),actor:x.adjusted_by,rawType:'sale_adjustment'}))].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const fmt=n=>Number(n).toLocaleString('th-TH',{maximumFractionDigits:3});
   host.innerHTML='<div class="hint">แสดง 100 รายการล่าสุดต่อแหล่งข้อมูล · ประวัติการตัดใช้เก่าอาจไม่ครบ และการ Reset ยอดขายไม่ได้คืนยอดสต๊อก</div>'+
-   (rows.length?rows.map(x=>'<div class="item"><div><strong>'+esc(x.rawType==='manual_adjustment'?(x.actor?(names[x.actor]||'ไม่พบชื่อผู้ทำรายการ'):'ไม่ทราบผู้บันทึก'):x.type)+'</strong><div class="small muted">'+esc(new Date(x.date).toLocaleString('th-TH'))+' · '+esc(x.reason)+(x.rawType==='sale_adjustment'?' · โดย '+esc(names[x.actor]||'ผู้มีสิทธิ์แก้ไข'):'')+'</div>'+(x.before!=null?'<div class="small muted">'+fmt(x.before)+' → '+fmt(x.after)+' '+esc(stock.unit)+'</div>':'')+'</div><strong class="'+(x.delta<0?'warn':'good')+'">'+(x.delta>0?'+':'')+fmt(x.delta)+' '+esc(stock.unit)+'</strong></div>').join(''):'<div class="small muted">ยังไม่มีประวัติการเคลื่อนไหวที่บันทึกไว้</div>');
+   (rows.length?rows.map(x=>'<div class="item"><div><strong>'+esc(x.rawType==='sale_adjustment'?'ปรับใช้จริงจากการขาย':x.rawType==='manual_adjustment'?(x.actor?(names[x.actor]||'ไม่พบชื่อผู้ทำรายการ'):'ไม่ทราบผู้บันทึก'):x.type)+'</strong><div class="small muted">'+esc(new Date(x.date).toLocaleString('th-TH'))+' · '+esc(x.reason)+(x.rawType==='sale_adjustment'?' · โดย '+esc(names[x.actor]||'ผู้มีสิทธิ์แก้ไข'):'')+'</div>'+(x.before!=null?'<div class="small muted">'+fmt(x.before)+' → '+fmt(x.after)+' '+esc(stock.unit)+'</div>':'')+'</div><strong class="'+(x.delta<0?'warn':'good')+'">'+(x.delta>0?'+':'')+fmt(x.delta)+' '+esc(stock.unit)+'</strong></div>').join(''):'<div class="small muted">ยังไม่มีประวัติการเคลื่อนไหวที่บันทึกไว้</div>');
  }catch(e){if(host.isConnected)host.textContent='โหลดประวัติไม่สำเร็จ: '+e.message}
 }
 function renderManualConsumption(){
