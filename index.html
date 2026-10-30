@@ -1135,7 +1135,7 @@ async function glurLoadSaleIngredients(){
 async function loadGlurSales(){
   glurSalesError='';
   const {data,error}=await glurSupabase.from('glur_sales')
-    .select('id,shop_id,sold_by,total_amount,total_cost,sold_at,created_at,note,recipe_name,quantity_sold,nonstock_snapshot')
+    .select('id,shop_id,sold_by,total_amount,total_cost,sold_at,created_at,note,recipe_name,quantity_sold,nonstock_snapshot,is_backdated,backdated_business_date')
     .eq('shop_id',GLUR_SHOP_ID).order('sold_at',{ascending:false}).limit(glurSaleHistoryLimit);
   if(error){glurSalesError=error.message;glurSalesReady=false}
   else{
@@ -1193,7 +1193,7 @@ function glurRenderCustomCocktail(){
 function renderGlurSales(){
   const recipes=cloudRecipes.filter(r=>r.is_active!==false&&String(r.name||'').toLowerCase().includes(glurSalesSearch.toLowerCase()));
   const negatives=cloudStock.filter(x=>num(x.quantity)<0);
-  const history=glurSales.map(s=>{
+  const history=glurSales.filter(s=>!s.is_backdated).map(s=>{
     const items=glurSaleItems.filter(i=>i.sale_id===s.id);
     const name=s.recipe_name?`${esc(s.recipe_name)} × ${num(s.quantity_sold||1)}`:(items.length?items.map(i=>`${esc(i.recipe_name)} × ${num(i.quantity)}`).join(', '):'รายการขาย');
     const ingredients=glurSaleIngredients.filter(i=>i.sale_id===s.id);
@@ -2240,7 +2240,7 @@ glurLoadAdjustmentAccess=async function(){await glurActivityOldAccess();document
 function glurRoleAllowed(p){
  const role=glurAdjustRole;
  if(!role)return true;
- if(role==='staff')return ['dashboard','stock','recipes','sales','receiving','closing'].includes(p);
+ if(role==='staff')return ['dashboard','stock','recipes','sales','backdated-sales','receiving','closing'].includes(p);
  if(role==='supervisor')return !['team','audit','activity-audit','profit','closing-report','settings'].includes(p);
  return true;
 }
@@ -2628,7 +2628,7 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
 <script>
 /* GLUR BAR: visibility/access layer. Database RLS/RPC remain the security boundary. */
 (function(){
- const rules={stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
+ const rules={'backdated-sales':['sales_create'],stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
  let ready=false;
  const has=k=>glurAdjustRole==='owner'||(ready&&glurMyPermissions?.[k]===true);
  const can=p=>!rules[p]||(!ready&&glurAdjustRole!=='owner')||rules[p].some(has);
@@ -2730,6 +2730,48 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
 #glurMobileReport .glur-mobile-notes p{font-size:12px;margin:5px 0;color:#b4a69b}
 #glurMobileReport .btn{min-width:48px;min-height:40px;padding:6px 8px;font-size:13px}
 </style>
+<script>
+// Separate entry workflow; ordinary sale RPC and form stay unchanged.
+let glurBackdatedRows=[],glurBackdatedError='',glurBackdatedBusy=false;
+let glurBackdatedDraft={recipe_id:'',quantity:'1',business_date:'',note:''};
+async function glurLoadBackdatedSales(){
+ const {data,error}=await glurSupabase.from('glur_sales').select('id,recipe_name,quantity_sold,total_amount,total_cost,note,created_at,backdated_business_date').eq('shop_id',GLUR_SHOP_ID).eq('is_backdated',true).order('created_at',{ascending:false}).limit(100);
+ glurBackdatedError=error?.message||'';glurBackdatedRows=error?[]:(data||[]);
+ if(currentUser&&page==='backdated-sales')renderGlurBackdatedSales();
+}
+function renderGlurBackdatedSales(){
+ const allowed=glurAdjustRole==='owner'||glurMyPermissions.sales_create===true;
+ if(!allowed){shell('ลงขายย้อนหลัง','<div class="hint">บัญชีนี้ไม่มีสิทธิ์บันทึกยอดขาย</div>');return}
+ if(!glurBackdatedDraft.business_date)glurBackdatedDraft.business_date=glurPreviousBusinessDay();
+ const d=glurBackdatedDraft;
+ shell('ลงขายย้อนหลัง',`<div class="hint">ใช้เมื่อขายแล้วลืมลง ยอดเข้าวันทำการที่เลือก ไม่ใช่วันที่บันทึก · ตัดสต๊อกปัจจุบันตามสูตรและต้นทุนที่ระบบใช้อยู่ตอนบันทึกหนึ่งครั้ง</div><div class="card"><form id="glurBackdatedForm" class="stack"><div class="field"><label>วันที่ขายจริง / วันทำการ</label><input name="business_date" type="date" max="${glurPreviousBusinessDay()}" value="${esc(d.business_date)}" required></div><div class="field"><label>ค้นหาเมนู</label><input id="glurBackdatedSearch" type="search" placeholder="พิมพ์ชื่อเมนู"></div><div class="field"><label>เมนูเครื่องดื่ม</label><select name="recipe_id" required><option value="">— เลือกเมนู —</option>${cloudRecipes.filter(r=>r.is_active!==false).map(r=>`<option value="${esc(r.id)}" ${r.id===d.recipe_id?'selected':''}>${esc(r.name)} — ${money(r.selling_price)}</option>`).join('')}</select></div><div class="field"><label>จำนวนแก้ว</label><input name="quantity" type="number" min="1" max="10000" step="1" value="${esc(d.quantity)}" required></div><div class="field"><label>หมายเหตุ / เหตุผลที่ลงย้อนหลัง (จำเป็น)</label><textarea name="note" rows="3" maxlength="2000" placeholder="เช่น ลืมลงยอดขายกะวันที่ 28" required>${esc(d.note)}</textarea></div><div id="glurBackdatedPreview" class="hint"></div><button type="submit" class="btn full" ${glurBackdatedBusy?'disabled':''}>${glurBackdatedBusy?'กำลังบันทึก…':'บันทึกขายย้อนหลังและตัดสต๊อก'}</button></form></div><div class="hint">ยอดขายรายวัน/รายเดือนรวมรายการนี้ตามวันที่เลือก ส่วนประวัติปิดยอดเป็นยอด ณ เวลาปิดเดิม จึงอาจต่างจากยอดขายที่เพิ่มภายหลัง · เวลาบันทึกจริงยังเก็บไว้ รายการนี้ระบุวันทำการ ไม่ระบุเวลาขายจริง</div><div class="row between"><div class="section-title">ประวัติลงขายย้อนหลัง</div><button type="button" id="glurBackdatedReload" class="btn secondary smallbtn">↻ รีเฟรช</button></div>${glurBackdatedError?`<div class="hint warn">${esc(glurBackdatedError)}</div>`:''}<div class="card">${glurBackdatedRows.length?glurBackdatedRows.map(x=>`<div class="item"><div><div class="item-name">${esc(x.recipe_name)} × ${num(x.quantity_sold)}</div><div class="small">ยอดขายของวันที่ ${esc(x.backdated_business_date)}</div><div class="small muted">บันทึกจริง ${esc(new Date(x.created_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}</div><div class="small" style="white-space:pre-wrap">หมายเหตุ: ${esc(x.note)}</div></div><strong>${money(x.total_amount)}</strong></div>`).join(''):empty('ยังไม่มีรายการขายย้อนหลัง')}</div><div class="small muted">แสดงรายการย้อนหลังล่าสุด 100 รายการ แยกจากประวัติขายปกติ</div>`);
+ const f=document.getElementById('glurBackdatedForm'),button=f.querySelector('[type=submit]');
+ const snapshot=()=>{for(const k of Object.keys(glurBackdatedDraft))glurBackdatedDraft[k]=f.elements[k].value};
+ const preview=()=>{snapshot();const r=cloudRecipes.find(x=>x.id===d.recipe_id),q=Number(d.quantity);const parts=(r?.ingredients||[]).map(i=>{const s=cloudStock.find(x=>x.id===i.stock_id);return `${s?.name||'ไม่พบวัตถุดิบ'} ${num(i.quantity)*q} ${s?.unit||''}`});document.getElementById('glurBackdatedPreview').textContent=r?`ยอด ${money(num(r.selling_price)*q)} → วันที่ ${d.business_date} · ตัดสต๊อก: ${parts.join(' · ')||'ส่วนผสมไม่ตัดสต๊อก'}`:'เลือกเมนูเพื่อดูยอดขายและวัตถุดิบที่จะตัด'};
+ f.oninput=preview;f.onchange=preview;preview();
+ document.getElementById('glurBackdatedSearch').oninput=e=>{const selected=f.elements.recipe_id.value;const rs=cloudRecipes.filter(r=>r.is_active!==false&&String(r.name).toLowerCase().includes(e.target.value.toLowerCase()));f.elements.recipe_id.innerHTML='<option value="">— เลือกเมนู —</option>'+rs.map(r=>`<option value="${esc(r.id)}">${esc(r.name)} — ${money(r.selling_price)}</option>`).join('');if(rs.some(r=>r.id===selected))f.elements.recipe_id.value=selected;preview()};
+ document.getElementById('glurBackdatedReload').onclick=glurLoadBackdatedSales;
+ f.onsubmit=async e=>{e.preventDefault();if(glurBackdatedBusy)return;snapshot();const r=cloudRecipes.find(x=>x.id===d.recipe_id),q=Number(d.quantity),note=d.note.trim(),day=d.business_date;
+ if(!r||r.is_active===false||!Number.isInteger(q)||q<1||q>10000||!note||!/^\d{4}-\d{2}-\d{2}$/.test(day)||day>=glurThaiBusinessToday()){toast('ตรวจสอบเมนู จำนวน วันที่ย้อนหลัง และหมายเหตุ');return}
+ if(!confirm(`ลงขายย้อนหลัง ${r.name} × ${q}\nเพิ่มยอด ${money(num(r.selling_price)*q)} ให้วันที่ ${day}\nตัดสต๊อกปัจจุบันตามสูตร\nหมายเหตุ: ${note}\n\nยืนยัน?`))return;
+ glurBackdatedBusy=true;button.disabled=true;button.textContent='กำลังบันทึก…';
+ const key='glur_pending_backdated_sale_'+GLUR_SHOP_ID+'_'+currentUser.id;
+ try{const fingerprint=JSON.stringify([r.id,q,note,day]);let pending;try{pending=JSON.parse(sessionStorage.getItem(key)||'null')}catch(_){pending=null}if(!pending||pending.fingerprint!==fingerprint){pending={fingerprint,key:crypto.randomUUID()};sessionStorage.setItem(key,JSON.stringify(pending))}
+ const {error}=await glurSupabase.rpc('glur_record_backdated_sale',{p_shop_id:GLUR_SHOP_ID,p_recipe_id:r.id,p_quantity:q,p_note:note,p_business_date:day,p_request_key:pending.key});if(error)throw error;
+ sessionStorage.removeItem(key);glurBackdatedDraft={recipe_id:'',quantity:'1',business_date:day,note:''};toast('เพิ่มยอดขายให้วันที่ '+day+' และตัดสต๊อกแล้ว');glurBackdatedBusy=false;
+ await Promise.all([loadCloudStock(),loadGlurSales(),glurLoadBackdatedSales(),glurLoadFinance()]);
+ }catch(err){toast('ยังยืนยันผลไม่ได้: '+(err.message||err)+' · หากเน็ตหลุด ให้ลองรายการเดิมอีกครั้ง');}
+ finally{glurBackdatedBusy=false;if(f.isConnected){button.disabled=false;button.textContent='บันทึกขายย้อนหลังและตัดสต๊อก'}}
+ };
+}
+(function(){
+ const button=document.createElement('button');button.dataset.page='backdated-sales';button.innerHTML='<span>↶</span>ลงขายย้อนหลัง';document.querySelector('#nav [data-page="sales"]').insertAdjacentElement('afterend',button);
+ const previousRender=render;render=function(){if(!currentUser)return;if(page==='backdated-sales'){renderGlurBackdatedSales();if(window.glurApplyPermissionVisibility)window.glurApplyPermissionVisibility();return}previousRender()};
+ const previousSet=setPage;setPage=function(p){if(p==='backdated-sales'&&!(glurAdjustRole==='owner'||glurMyPermissions.sales_create===true)){toast('บัญชีนี้ไม่มีสิทธิ์บันทึกยอดขาย');return}previousSet(p);if(p==='backdated-sales')Promise.all([loadCloudStock(),loadCloudRecipes(),glurLoadBackdatedSales()]).then(()=>{if(page===p)renderGlurBackdatedSales()})};
+})();
+
+</script>
 </body>
 </html>
+
 
