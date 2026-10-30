@@ -32,3 +32,5 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.glur_receive_stock_v2(uuid,uuid,numeric,numeric,text,text,text,text,uuid) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.glur_receive_stock_v2(uuid,uuid,numeric,numeric,text,text,text,text,uuid) TO authenticated;
+ALTER TABLE public.glur_stock_receipts ADD CONSTRAINT glur_gift_zero_cost_supplier CHECK (receipt_kind <> 'gift' OR (total_cost=0 AND btrim(supplier)<>'')), ADD CONSTRAINT glur_purchase_average_policy CHECK (receipt_kind<>'purchase' OR cost_policy='average');
+NOTIFY pgrst,'reload schema';
