@@ -733,7 +733,9 @@ async function updateGlurAccount(user){
     if(error)throw error;
     const identity=Array.isArray(data)?data[0]:data;
     const name=String(identity?.display_name||identity?.username||'ผู้ใช้งาน').trim();
-    const role=String(identity?.role||'ผู้ใช้งาน').trim();
+    const {data:developer}=await glurSupabase.rpc('glur_is_developer',{p_shop_id:GLUR_SHOP_ID});
+    if(serial!==glurAccountLookupSerial||currentUser?.id!==user.id)return;
+    const role=developer===true?'นักพัฒนา':String(identity?.role||'ผู้ใช้งาน').trim();
     el.textContent=name+' · '+role;
   }catch(e){
     if(serial===glurAccountLookupSerial&&currentUser?.id===user.id){
@@ -1344,13 +1346,14 @@ render=function(){
 const glurSalesPreviousSetPage=setPage;
 setPage=function(p){glurSalesPreviousSetPage(p);if(p==='sales'){loadGlurSales();if(!recipeCloudReady)loadCloudRecipes()}};
 const glurSalesPreviousShowAuthenticated=showAuthenticated;
-showAuthenticated=function(user){glurAdjustRole='';glurEditingSaleId=null;glurSalesPreviousShowAuthenticated(user);glurLoadAdjustmentAccess().then(()=>loadGlurSales())};
+showAuthenticated=function(user){glurMyPermissions={};glurAdjustRole='';glurEditingSaleId=null;glurSalesPreviousShowAuthenticated(user);glurLoadAdjustmentAccess().then(()=>loadGlurSales())};
 
 
 // GLUR BAR team administration and stock adjustment audit (cloud)
 function glurCanManageTeam(){return glurAdjustRole==='owner'}
 const GLUR_PERMISSION_ITEMS=[['stock_view','ดูสต๊อก'],['stock_use','บันทึกการใช้วัตถุดิบจริง'],['stock_create','เพิ่มสต๊อก'],['stock_edit','แก้ไขสต๊อก'],['stock_delete','ลบสต๊อก'],['stock_waste','จัดการของเสีย'],['recipes_view','ดูสูตร'],['recipes_create','เพิ่มสูตร'],['recipes_edit','แก้ไขสูตร'],['recipes_delete','ลบสูตร'],['sales_create','บันทึกยอดขาย'],['sales_edit','แก้ไขยอดขาย'],['sales_cancel','ยกเลิกยอดขาย'],['costs_view','ดูต้นทุน'],['expenses_manage','จัดการค่าใช้จ่าย'],['receiving_manage','รับสินค้าเข้า'],['reports_view','ดูรายงาน'],['closing_manage','ปิดยอดรายวัน'],['audit_view','ดูประวัติ'],['employees_edit','แก้ไขข้อมูลพนักงาน'],['employees_permissions','กำหนดสิทธิ์พนักงาน']];
 let glurMyPermissions={};
+function glurIsDeveloper(){return glurMyPermissions.system_developer===true}
 async function glurLoadMyPermissions(){
  try{const {data,error}=await glurSupabase.rpc('glur_my_permissions',{p_shop_id:GLUR_SHOP_ID});if(error)throw error;glurMyPermissions=data||{};}catch(e){glurMyPermissions={};console.warn('Permission service not ready:',e.message)}
  glurShowRoleNav();
@@ -1429,19 +1432,19 @@ async function glurLoadTeam(){
 }
 function renderGlurTeam(){
   if(!glurCanManageTeam()){shell('จัดการพนักงาน','<div class="hint">เฉพาะ Owner / Manager เท่านั้น</div>');return}
-  shell('จัดการพนักงาน',`<div class="hint">Owner / Manager · พนักงานล็อกอินด้วย Username และรหัสผ่าน · ไม่ต้องเปิด Supabase เพื่อเพิ่มบัญชี</div>
+  shell('จัดการพนักงาน',`<div class="hint">นักพัฒนาสร้างบัญชีเจ้าของร้านได้ · เจ้าของร้านจัดการพนักงานและงานร้าน · ล็อกอินด้วย Username และรหัสผ่าน · ไม่ต้องเปิด Supabase เพื่อเพิ่มบัญชี</div>
     ${glurTeamError?`<div class="hint warn">${esc(glurTeamError)}</div>`:''}
     <div class="card"><div class="section-title" style="margin-top:0">＋ สร้างบัญชีใหม่</div>
       <form id="glurTeamCreate" class="stack" autocomplete="off">
         <div class="field"><label>Username (a-z, 0-9, _ ความยาว 3–30)</label><input name="username" required minlength="3" maxlength="30" pattern="[a-z0-9_]{3,30}" autocapitalize="off" autocomplete="off"></div>
         <div class="field"><label>ชื่อพนักงาน (แสดงในรายงาน)</label><input name="display_name" required maxlength="100"></div>
         <div class="field"><label>รหัสผ่านเริ่มต้น (อย่างน้อย 8 ตัว)</label><input name="password" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
-        <div class="field"><label>ตำแหน่ง</label><select name="role"><option value="staff">Staff · พนักงาน</option>${glurAdjustRole==='owner'?'<option value="manager">Manager · ผู้จัดการ</option>':''}<option value="supervisor">Supervisor · หัวหน้างาน</option></select></div>
+        <div class="field"><label>ตำแหน่ง</label><select name="role">${glurIsDeveloper()?'<option value="owner">Owner · เจ้าของร้าน</option>':''}<option value="staff" selected>Staff · พนักงาน</option>${glurAdjustRole==='owner'?'<option value="manager">Manager · ผู้จัดการ</option>':''}<option value="supervisor">Supervisor · หัวหน้างาน</option></select></div>
         <button type="submit" class="btn full" ${glurTeamBusy?'disabled':''}>สร้างบัญชีพนักงาน</button>
       </form></div>
     <div class="section-title">บัญชีในร้าน (${glurTeamMembers.length})</div>
-    <div class="card">${glurTeamMembers.length?glurTeamMembers.map(m=>`<div class="item"><div style="min-width:0"><div class="item-name">${esc(m.display_name||'ยังไม่ได้ตั้งชื่อ')} <span class="small muted">(@${esc(m.username||'ไม่มี Username')})</span></div><div class="small muted">${esc(m.role)} · ${esc(glurSaleDate(m.created_at))}</div></div>
-    ${glurAdjustRole==='owner'||(m.role!=='owner'&&m.role!=='manager')?`<button type="button" class="btn secondary smallbtn" data-team-name="${esc(m.user_id)}">แก้ชื่อ</button>`:''}${glurCanDelegate()&&m.role!=='owner'&&(glurAdjustRole==='owner'||m.role!=='manager')?`<button type="button" class="btn secondary smallbtn" data-team-permissions="${esc(m.user_id)}">⚙ สิทธิ์</button>`:''}${m.role==='owner'||(glurAdjustRole==='manager'&&m.role==='manager')?'<span class="pill">ป้องกันบัญชี</span>':`<div class="actions"><select data-team-role="${esc(m.user_id)}" aria-label="เปลี่ยนตำแหน่ง"><option value="staff" ${m.role==='staff'?'selected':''}>Staff</option>${glurAdjustRole==='owner'?`<option value="manager" ${m.role==='manager'?'selected':''}>Manager</option>`:''}<option value="supervisor" ${m.role==='supervisor'?'selected':''}>Supervisor</option></select>${glurAdjustRole==='owner'?`<button type="button" class="btn danger smallbtn" data-team-remove="${esc(m.user_id)}">ถอนสิทธิ์</button>`:''}</div>`}</div>`).join(''):empty('กดรีเฟรชเพื่อโหลดรายชื่อ')}</div>
+    <div class="card">${glurTeamMembers.length?glurTeamMembers.map(m=>`<div class="item"><div style="min-width:0"><div class="item-name">${esc(m.display_name||'ยังไม่ได้ตั้งชื่อ')} <span class="small muted">(@${esc(m.username||'ไม่มี Username')})</span></div><div class="small muted">${esc(m.is_developer?'นักพัฒนา':m.role==='owner'?'เจ้าของร้าน':m.role)} · ${esc(glurSaleDate(m.created_at))}</div></div>
+    ${(!m.is_developer||glurIsDeveloper())&&(glurAdjustRole==='owner'||(m.role!=='owner'&&m.role!=='manager'))?`<button type="button" class="btn secondary smallbtn" data-team-name="${esc(m.user_id)}">แก้ชื่อ</button>`:''}${glurCanDelegate()&&m.role!=='owner'&&(glurAdjustRole==='owner'||m.role!=='manager')?`<button type="button" class="btn secondary smallbtn" data-team-permissions="${esc(m.user_id)}">⚙ สิทธิ์</button>`:''}${m.is_developer||(m.role==='owner'&&!glurIsDeveloper())||(glurAdjustRole==='manager'&&m.role==='manager')?'<span class="pill">ป้องกันบัญชี</span>':`<div class="actions"><select data-team-role="${esc(m.user_id)}" aria-label="เปลี่ยนตำแหน่ง">${glurIsDeveloper()?`<option value="owner" ${m.role==='owner'?'selected':''}>Owner · เจ้าของร้าน</option>`:''}<option value="staff" ${m.role==='staff'?'selected':''}>Staff</option>${glurAdjustRole==='owner'?`<option value="manager" ${m.role==='manager'?'selected':''}>Manager</option>`:''}<option value="supervisor" ${m.role==='supervisor'?'selected':''}>Supervisor</option></select>${glurAdjustRole==='owner'?`<button type="button" class="btn danger smallbtn" data-team-remove="${esc(m.user_id)}">ถอนสิทธิ์</button>`:''}</div>`}</div>`).join(''):empty('กดรีเฟรชเพื่อโหลดรายชื่อ')}</div>
     <button id="glurTeamRefresh" type="button" class="btn secondary full">↻ รีเฟรชรายชื่อ</button>
     <div class="hint">การถอนสิทธิ์จะนำพนักงานออกจากร้าน แต่ไม่ได้ลบประวัติยอดขายหรือบัญชี Supabase Auth</div>`);
   document.getElementById('glurTeamRefresh').onclick=glurLoadTeam;
@@ -1592,8 +1595,8 @@ function renderCosts(){
  document.querySelectorAll('[data-expense-delete]').forEach(b=>b.onclick=async()=>{if(glurAdjustRole!=='owner')return;const x=glurExpenses.find(e=>e.id===b.dataset.expenseDelete);if(!x)return;const reason=prompt('เหตุผลที่ยกเลิกค่าใช้จ่าย '+x.name+' ('+money(x.amount)+')\nกรอกเหตุผลอย่างน้อย 5 ตัวอักษร');if(reason===null)return;if(reason.trim().length<5){toast('กรุณากรอกเหตุผลอย่างน้อย 5 ตัวอักษร');return}if(!confirm('ยืนยันยกเลิกค่าใช้จ่ายนี้? ระบบจะเก็บประวัติไว้'))return;b.disabled=true;const {error}=await glurSupabase.rpc('glur_cancel_expense',{p_expense_id:x.id,p_reason:reason.trim()});if(error){toast('ยกเลิกไม่ได้: '+error.message);b.disabled=false;return}toast('ยกเลิกค่าใช้จ่ายและบันทึกประวัติแล้ว');await glurLoadExpenses()});
 }
 function renderSettings(){
- shell('ข้อมูล Cloud และสำรองข้อมูล',`<div class="hint">GLUR BAR ใช้ Supabase เป็นฐานข้อมูลหลัก ไม่ใช้ localStorage เก็บข้อมูลธุรกิจแล้ว · การดาวน์โหลดเป็นไฟล์สำรองสำหรับเก็บไว้เท่านั้น ไม่ใช่การสำรองทั้งฐานข้อมูลหรือสมาชิก</div><div class="grid">${metric('วัตถุดิบ',cloudStock.length+' รายการ')}${metric('สูตร',cloudRecipes.length+' สูตร')}${metric('ยอดขายที่โหลด',glurSales.length+' รายการ')}${metric('ค่าใช้จ่ายที่โหลด',glurExpenses.length+' รายการ')}</div><div class="card"><button class="btn full" id="glurExportCloud">ดาวน์โหลดข้อมูล Cloud ที่โหลดได้ (JSON)</button><p class="small muted">ข้อมูลยอดขายและค่าใช้จ่ายอาจถูกจำกัดจำนวนตามการโหลด ไม่ใช่ไฟล์กู้คืน Supabase โดยอัตโนมัติ</p><button class="btn secondary full" id="glurReloadCloud">↻ โหลดข้อมูลใหม่</button></div><div class="card" id="glurClonePanel"><div class="section-title" style="margin-top:0">Clone LIVE → TEST (Owner)</div><p class="small muted">แทนที่ข้อมูลหลักใน TEST ด้วย LIVE: สต๊อก สูตร Pre-Batch และต้นทุน · ล้างประวัติการขาย/สต๊อกของ TEST เพื่อเริ่มทดลองใหม่ · LIVE ไม่เปลี่ยน · สำรอง TEST ก่อนทุกครั้ง</p><button type="button" class="btn secondary full" id="glurCloneLiveTest">ตรวจสอบและ Clone LIVE → TEST</button><p class="small muted" id="glurCloneStatus">ต้องเข้าสู่ระบบด้วยบัญชี Owner</p></div>`);
- document.getElementById('glurCloneLiveTest').onclick=async()=>{const status=document.getElementById('glurCloneStatus');const button=document.getElementById('glurCloneLiveTest');button.disabled=true;status.textContent='กำลังตรวจสอบสิทธิ์ Owner และความพร้อม...';try{const {data:preview,error:pe}=await glurSupabase.rpc('glur_owner_clone_preview');if(pe)throw pe;const backup=preview?.test_backup||'ไม่ทราบ';if(!confirm('ยืนยัน Clone LIVE → TEST?\\nข้อมูลสต๊อก สูตร Pre-Batch และต้นทุน TEST จะถูกแทนที่\\nประวัติการขายและเคลื่อนไหว TEST จะถูกล้าง\\nLIVE ไม่เปลี่ยน\\nBackup ล่าสุด: '+backup))return;const phrase=prompt('พิมพ์ CLONE LIVE TO TEST เพื่อยืนยัน');if(phrase!=='CLONE LIVE TO TEST'){status.textContent='ยกเลิกการ Clone';return}status.textContent='กำลังสำรอง TEST และ Clone...';const {data,error}=await glurSupabase.rpc('glur_owner_clone_live_to_test',{p_confirm:phrase});if(error)throw error;status.textContent='Clone สำเร็จ · สต๊อก '+data.stock+' · สูตร '+data.recipes+' · Pre-Batch '+data.prebatch+' · Backup '+data.backup_id;await Promise.all([loadCloudStock(),loadCloudRecipes(),loadGlurSales(),loadCloudReceipts()]);toast('Clone LIVE → TEST สำเร็จ');}catch(err){status.textContent='Clone ไม่สำเร็จ: '+(err.message||String(err));toast('Clone ไม่สำเร็จ')}finally{button.disabled=false}};
+ shell('ข้อมูล Cloud และสำรองข้อมูล',`<div class="hint">GLUR BAR ใช้ Supabase เป็นฐานข้อมูลหลัก ไม่ใช้ localStorage เก็บข้อมูลธุรกิจแล้ว · การดาวน์โหลดเป็นไฟล์สำรองสำหรับเก็บไว้เท่านั้น ไม่ใช่การสำรองทั้งฐานข้อมูลหรือสมาชิก</div><div class="grid">${metric('วัตถุดิบ',cloudStock.length+' รายการ')}${metric('สูตร',cloudRecipes.length+' สูตร')}${metric('ยอดขายที่โหลด',glurSales.length+' รายการ')}${metric('ค่าใช้จ่ายที่โหลด',glurExpenses.length+' รายการ')}</div><div class="card"><button class="btn full" id="glurExportCloud">ดาวน์โหลดข้อมูล Cloud ที่โหลดได้ (JSON)</button><p class="small muted">ข้อมูลยอดขายและค่าใช้จ่ายอาจถูกจำกัดจำนวนตามการโหลด ไม่ใช่ไฟล์กู้คืน Supabase โดยอัตโนมัติ</p><button class="btn secondary full" id="glurReloadCloud">↻ โหลดข้อมูลใหม่</button></div><div class="card ${glurIsDeveloper()?'':'hidden'}" id="glurClonePanel"><div class="section-title" style="margin-top:0">Clone LIVE → TEST (นักพัฒนา)</div><p class="small muted">แทนที่ข้อมูลหลักใน TEST ด้วย LIVE: สต๊อก สูตร Pre-Batch และต้นทุน · ล้างประวัติการขาย/สต๊อกของ TEST เพื่อเริ่มทดลองใหม่ · LIVE ไม่เปลี่ยน · สำรอง TEST ก่อนทุกครั้ง</p><button type="button" class="btn secondary full" id="glurCloneLiveTest">ตรวจสอบและ Clone LIVE → TEST</button><p class="small muted" id="glurCloneStatus">ต้องเข้าสู่ระบบด้วยบัญชี Owner</p></div>`);
+ document.getElementById('glurCloneLiveTest').onclick=async()=>{if(!glurIsDeveloper()){toast('เฉพาะนักพัฒนาเท่านั้น');return}const status=document.getElementById('glurCloneStatus');const button=document.getElementById('glurCloneLiveTest');button.disabled=true;status.textContent='กำลังตรวจสอบสิทธิ์ Owner และความพร้อม...';try{const {data:preview,error:pe}=await glurSupabase.rpc('glur_owner_clone_preview');if(pe)throw pe;const backup=preview?.test_backup||'ไม่ทราบ';if(!confirm('ยืนยัน Clone LIVE → TEST?\\nข้อมูลสต๊อก สูตร Pre-Batch และต้นทุน TEST จะถูกแทนที่\\nประวัติการขายและเคลื่อนไหว TEST จะถูกล้าง\\nLIVE ไม่เปลี่ยน\\nBackup ล่าสุด: '+backup))return;const phrase=prompt('พิมพ์ CLONE LIVE TO TEST เพื่อยืนยัน');if(phrase!=='CLONE LIVE TO TEST'){status.textContent='ยกเลิกการ Clone';return}status.textContent='กำลังสำรอง TEST และ Clone...';const {data,error}=await glurSupabase.rpc('glur_owner_clone_live_to_test',{p_confirm:phrase});if(error)throw error;status.textContent='Clone สำเร็จ · สต๊อก '+data.stock+' · สูตร '+data.recipes+' · Pre-Batch '+data.prebatch+' · Backup '+data.backup_id;await Promise.all([loadCloudStock(),loadCloudRecipes(),loadGlurSales(),loadCloudReceipts()]);toast('Clone LIVE → TEST สำเร็จ');}catch(err){status.textContent='Clone ไม่สำเร็จ: '+(err.message||String(err));toast('Clone ไม่สำเร็จ')}finally{button.disabled=false}};
  document.getElementById('glurExportCloud').onclick=()=>downloadBlob(JSON.stringify({app:'GLUR BAR',exportedAt:new Date().toISOString(),shop_id:GLUR_SHOP_ID,partial_export:true,stock:cloudStock,recipes:cloudRecipes,sales:glurSales,sale_items:glurSaleItems,sale_ingredients:glurSaleIngredients,receipts:cloudReceipts,expenses:glurExpenses},null,2),'glur-cloud-partial-'+dateNow()+'.json','application/json');
  document.getElementById('glurReloadCloud').onclick=async()=>{await Promise.all([loadCloudStock(),loadCloudRecipes(),loadGlurSales(),loadCloudReceipts(),glurLoadExpenses()]);renderSettings();toast('โหลดข้อมูล Cloud ใหม่แล้ว')};
 }
@@ -1709,7 +1712,7 @@ showAuthenticated=function(user){pbPrevAuth(user);pbMode='list';glurLoadCostCata
 // Owner-only data management: server RPC checks membership and performs an atomic transaction.
 let glurResetAudit=[];
 async function glurLoadResetAudit(){
- if(glurAdjustRole!=='owner')return;
+ if(!glurIsDeveloper())return;
  const {data,error}=await glurSupabase.from('glur_data_reset_audit')
   .select('id,scope,reason,deleted_counts,requested_by,created_at')
   .eq('shop_id',GLUR_SHOP_ID).order('created_at',{ascending:false}).limit(30);
@@ -1718,9 +1721,9 @@ async function glurLoadResetAudit(){
  if(page==='settings')renderSettings();
 }
 function glurRenderResetPanel(){
- if(glurAdjustRole!=='owner')return '';
+ if(!glurIsDeveloper())return '';
  const scopes=[...(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?[['test-transactions','Set Zero ยอดทดลอง (เก็บสูตรและสต๊อก)']]:[]),['sales','ยอดขายและประวัติปรับยอดขาย'],['expenses','ค่าใช้จ่ายและประวัติยกเลิก'],['prebatch','สูตร Pre-batch และประวัติผลิต'],['recipes','สูตรเครื่องดื่ม'],['stock','สต๊อกและประวัติสต๊อก'],['closing','ประวัติปิดยอด (Snapshot)'],['all','ข้อมูลธุรกิจทั้งหมด (คงบัญชีและสิทธิ์ไว้)']];
- return `<div class="section-title">จัดการข้อมูล · เฉพาะ Owner</div>${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?`<div class="card" style="border:2px solid #f5a65c"><strong>🧪 TEST · Set Zero</strong><p class="small muted">ล้างยอดขาย ค่าใช้จ่าย และปิดยอด TEST แต่เก็บสูตรและยอดสต๊อกปัจจุบันไว้ · ไม่คืนยอดจากการขายเก่า · ต้องสำรองข้อมูลก่อน</p><button type="button" class="btn secondary full" id="glurTestZeroPrepare">Set Zero ยอดทดลอง (เก็บสูตรและสต๊อก)</button></div>`:''}<div class="card" style="border-color:#a74b42">
+ return `<div class="section-title">จัดการระบบ · เฉพาะนักพัฒนา</div>${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?`<div class="card" style="border:2px solid #f5a65c"><strong>🧪 TEST · Set Zero</strong><p class="small muted">ล้างยอดขาย ค่าใช้จ่าย และปิดยอด TEST แต่เก็บสูตรและยอดสต๊อกปัจจุบันไว้ · ไม่คืนยอดจากการขายเก่า · ต้องสำรองข้อมูลก่อน</p><button type="button" class="btn secondary full" id="glurTestZeroPrepare">Set Zero ยอดทดลอง (เก็บสูตรและสต๊อก)</button></div>`:''}<div class="card" style="border-color:#a74b42">
  <div class="hint warn">การล้างยอดขาย/ค่าใช้จ่ายจะถูกปฏิเสธถ้ายังมีประวัติปิดยอด ต้องล้างหมวดปิดยอดก่อนโดยเจตนา หรือเลือก RESET ALL หลังสำรองข้อมูล · การลบเป็นการลบจริงและไม่คืนยอดสต๊อกอัตโนมัติ · บางหมวดอาจถูกปฏิเสธหากยังมีข้อมูลที่เชื่อมโยงกัน · ต้องสำรองข้อมูลและตรวจสอบก่อน</div>
  <form id="glurResetForm" class="stack" autocomplete="off">
  <div class="field"><label>เลือกหมวดที่ต้องการล้าง</label><select name="scope">${scopes.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
@@ -1737,7 +1740,7 @@ function glurRenderResetPanel(){
 const glurResetPreviousSettings=renderSettings;
 renderSettings=function(){
  glurResetPreviousSettings();
- if(glurAdjustRole!=='owner')return;
+ if(!glurIsDeveloper())return;
  const app=document.getElementById('app');app.insertAdjacentHTML('beforeend',glurRenderResetPanel());
  const form=document.getElementById('glurResetForm');
  const phrase=()=>{const code=form.elements.scope.value==='test-transactions'?'RESET TEST SALES':'RESET '+form.elements.scope.value.toUpperCase();document.getElementById('glurResetPhrase').textContent=code;form.elements.confirmation.placeholder='';form.elements.confirmation.value=''};
@@ -1849,9 +1852,9 @@ function renderGlurClosing(){
  ${allowed?`<div class="card"><div class="closing-head"><strong>✓ ปิดยอดรอบนี้</strong><span class="closing-date">${esc(formatDate(date))}</span></div><form id="glurCloseForm" class="stack" style="margin-top:12px"><div class="field"><label>วันที่ทำการ</label><input name="businessDate" type="date" max="${glurThaiBusinessToday()}" value="${esc(date)}" required></div><div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><textarea name="note" rows="2" maxlength="1000" placeholder="เช่น ปิดกะตามปกติ"></textarea></div><button class="btn full" type="submit" ${glurClosingBusy?'disabled':''}>✓ ยืนยันปิดยอด</button></form><div class="closing-meta" style="margin-top:9px">ระบบเก็บยอด ณ เวลาปิดรอบ และไม่เปลี่ยนย้อนหลังอัตโนมัติ</div></div>`:'<div class="card">บัญชีนี้ไม่มีสิทธิ์ปิดยอด</div>'}
  <div class="closing-actions"><strong>ประวัติการปิดยอด</strong><button id="glurClosingReload" class="btn secondary smallbtn" type="button">↻ รีเฟรช</button></div>
  ${glurClosingError?`<div class="hint warn">${esc(glurClosingError)}</div>`:''}
- <div class="card">${glurClosingRows.length?glurClosingRows.map(x=>`<div class="closing-entry"><div class="closing-entry-top"><div><h3>${esc(formatDate(x.business_date))} · รอบ ${esc(x.session_no||1)}</h3><div class="closing-meta">${esc(x.drinks_sold)} แก้ว · ${esc(x.sale_transactions)} รายการ</div></div><span class="closing-meta">ปิดแล้ว</span></div><details><summary>ดูรายละเอียดรอบนี้</summary><div class="closing-meta">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}<br>โดย ${esc(x.closer_display_name||x.closer_username||'ไม่ระบุ')}</div>${(canSeeFinance?[['ยอดขาย',x.revenue],['ต้นทุนขาย',x.cogs],['กำไรขั้นต้น',x.gross_profit],['ค่าใช้จ่าย',x.expenses],['กำไรสุทธิ',x.profit_after_expenses]]:[]).map(([n,v])=>`<div class="tableline"><span>${n}</span><strong>${glurMoneySafe(v)}</strong></div>`).join('')}${x.note?`<div class="closing-meta">หมายเหตุ: ${esc(x.note)}</div>`:''}${glurAdjustRole==='owner'?`<button type="button" class="btn secondary smallbtn glur-delete-closing" data-closing-id="${esc(x.id)}" data-closing-date="${esc(x.business_date)}" style="margin-top:10px">ลบรายการนี้ (Owner)</button>`:''}</details></div>`).join(''):`<div style="text-align:center;padding:24px 8px;color:var(--muted,#aaa)">ยังไม่มีประวัติการปิดยอด<br><span style="font-size:13px">เมื่อปิดยอดครั้งแรก รายการจะปรากฏที่นี่</span></div>`}</div></section>`);
+ <div class="card">${glurClosingRows.length?glurClosingRows.map(x=>`<div class="closing-entry"><div class="closing-entry-top"><div><h3>${esc(formatDate(x.business_date))} · รอบ ${esc(x.session_no||1)}</h3><div class="closing-meta">${esc(x.drinks_sold)} แก้ว · ${esc(x.sale_transactions)} รายการ</div></div><span class="closing-meta">ปิดแล้ว</span></div><details><summary>ดูรายละเอียดรอบนี้</summary><div class="closing-meta">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}<br>โดย ${esc(x.closer_display_name||x.closer_username||'ไม่ระบุ')}</div>${(canSeeFinance?[['ยอดขาย',x.revenue],['ต้นทุนขาย',x.cogs],['กำไรขั้นต้น',x.gross_profit],['ค่าใช้จ่าย',x.expenses],['กำไรสุทธิ',x.profit_after_expenses]]:[]).map(([n,v])=>`<div class="tableline"><span>${n}</span><strong>${glurMoneySafe(v)}</strong></div>`).join('')}${x.note?`<div class="closing-meta">หมายเหตุ: ${esc(x.note)}</div>`:''}${glurIsDeveloper()?`<button type="button" class="btn secondary smallbtn glur-delete-closing" data-closing-id="${esc(x.id)}" data-closing-date="${esc(x.business_date)}" style="margin-top:10px">ลบรายการนี้ (Owner)</button>`:''}</details></div>`).join(''):`<div style="text-align:center;padding:24px 8px;color:var(--muted,#aaa)">ยังไม่มีประวัติการปิดยอด<br><span style="font-size:13px">เมื่อปิดยอดครั้งแรก รายการจะปรากฏที่นี่</span></div>`}</div></section>`);
  document.querySelectorAll('.glur-delete-closing').forEach(btn=>btn.onclick=async()=>{
-  if(glurAdjustRole!=='owner'){toast('เฉพาะ Owner เท่านั้น');return}
+  if(!glurIsDeveloper()){toast('เฉพาะนักพัฒนาเท่านั้น');return}
   const id=btn.dataset.closingId,day=btn.dataset.closingDate;
   const reason=prompt('ระบุเหตุผลที่ต้องลบการปิดยอดวันที่ '+day+' (อย่างน้อย 5 ตัวอักษร)');
   if(reason===null)return;
@@ -2238,6 +2241,7 @@ glurLoadAdjustmentAccess=async function(){await glurActivityOldAccess();document
 
 // GLUR BAR Stage 2: presentation guard; Supabase policies and RPC checks remain authoritative.
 function glurRoleAllowed(p){
+ if(p==='backdated-sales')return glurIsDeveloper();
  const role=glurAdjustRole;
  if(!role)return true;
  if(role==='staff')return ['dashboard','stock','recipes','sales','backdated-sales','receiving','closing'].includes(p);
@@ -2628,10 +2632,10 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
 <script>
 /* GLUR BAR: visibility/access layer. Database RLS/RPC remain the security boundary. */
 (function(){
- const rules={'backdated-sales':['sales_create'],stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
+ const rules={'backdated-sales':['system_developer'],stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
  let ready=false;
  const has=k=>glurAdjustRole==='owner'||(ready&&glurMyPermissions?.[k]===true);
- const can=p=>!rules[p]||(!ready&&glurAdjustRole!=='owner')||rules[p].some(has);
+ const can=p=>p==='backdated-sales'?glurIsDeveloper():!rules[p]||(!ready&&glurAdjustRole!=='owner')||rules[p].some(has);
  const hide=(el,yes)=>{if(el){el.classList.toggle('hidden',yes);if(yes)el.style.setProperty('display','none','important');else el.style.removeProperty('display')}};
  function apply(){
   if(!currentUser)return;
@@ -2740,8 +2744,8 @@ async function glurLoadBackdatedSales(){
  if(currentUser&&page==='backdated-sales')renderGlurBackdatedSales();
 }
 function renderGlurBackdatedSales(){
- const allowed=glurAdjustRole==='owner'||glurMyPermissions.sales_create===true;
- if(!allowed){shell('ลงขายย้อนหลัง','<div class="hint">บัญชีนี้ไม่มีสิทธิ์บันทึกยอดขาย</div>');return}
+ const allowed=glurIsDeveloper();
+ if(!allowed){shell('ลงขายย้อนหลัง','<div class="hint">ลงขายย้อนหลังได้เฉพาะนักพัฒนา</div>');return}
  if(!glurBackdatedDraft.business_date)glurBackdatedDraft.business_date=glurPreviousBusinessDay();
  const d=glurBackdatedDraft;
  shell('ลงขายย้อนหลัง',`<section class="backdated-ui"><p class="backdated-lead">เลือกวันขาย → เลือกเมนู → ใส่หมายเหตุ</p><div class="card backdated-entry"><form id="glurBackdatedForm" class="stack"><div class="backdated-pair"><div class="field"><label for="backdatedDay">วันที่ขายจริง</label><input id="backdatedDay" name="business_date" type="date" max="${glurPreviousBusinessDay()}" value="${esc(d.business_date)}" required></div><div class="field"><label for="backdatedQty">จำนวนแก้ว</label><input id="backdatedQty" name="quantity" type="number" inputmode="numeric" min="1" max="10000" step="1" value="${esc(d.quantity)}" required></div></div><div class="field"><label for="backdatedMenu">เมนูเครื่องดื่ม</label><input id="glurBackdatedSearch" type="search" aria-label="ค้นหาเมนู" placeholder="ค้นหาชื่อเมนู" autocomplete="off"><select id="backdatedMenu" name="recipe_id" required><option value="">เลือกเมนู</option>${cloudRecipes.filter(r=>r.is_active!==false).map(r=>`<option value="${esc(r.id)}" ${r.id===d.recipe_id?'selected':''}>${esc(r.name)} — ${money(r.selling_price)}</option>`).join('')}</select></div><div class="field"><label for="backdatedNote">หมายเหตุ <span class="muted">· จำเป็น</span></label><textarea id="backdatedNote" name="note" rows="2" maxlength="2000" placeholder="เช่น ลืมลงยอดกะวันที่ 28" required>${esc(d.note)}</textarea></div><div id="glurBackdatedPreview" class="backdated-summary" role="status" aria-live="polite"></div><button type="submit" class="btn full" ${glurBackdatedBusy?'disabled':''}>${glurBackdatedBusy?'กำลังบันทึก…':'บันทึกย้อนหลังและตัดสต๊อก'}</button><div class="backdated-footnote">ยอดเข้าวันที่เลือก · ตัดสต๊อกปัจจุบัน 1 ครั้ง</div></form></div><details class="backdated-help"><summary>การคิดยอดและต้นทุน</summary><p>ยอดขายรายวันและรายเดือนรวมตามวันที่เลือก ใช้สูตรและต้นทุนตอนบันทึก และเก็บเวลาบันทึกจริงไว้ ประวัติปิดยอดเดิมยังเป็นยอด ณ เวลาปิด จึงอาจต่างจากยอดขายหลังเพิ่มรายการย้อนหลัง</p></details><details class="card backdated-history"><summary>ประวัติลงขายย้อนหลัง <span class="pill">${glurBackdatedRows.length}</span></summary><div class="backdated-history-toolbar"><span class="small muted">ล่าสุด 100 รายการ</span><button type="button" id="glurBackdatedReload" class="btn secondary smallbtn">↻ รีเฟรช</button></div>${glurBackdatedError?`<div class="hint warn">${esc(glurBackdatedError)}</div>`:''}<div>${glurBackdatedRows.length?glurBackdatedRows.map(x=>`<div class="item"><div><div class="item-name">${esc(x.recipe_name)} × ${num(x.quantity_sold)}</div><div class="small">ยอดขายของวันที่ ${esc(x.backdated_business_date)}</div><div class="small muted">บันทึกจริง ${esc(new Date(x.created_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}</div><div class="small" style="white-space:pre-wrap">หมายเหตุ: ${esc(x.note)}</div></div><strong>${money(x.total_amount)}</strong></div>`).join(''):empty('ยังไม่มีรายการขายย้อนหลัง')}</div></details></section>`);
@@ -2767,7 +2771,7 @@ function renderGlurBackdatedSales(){
 (function(){
  const button=document.createElement('button');button.dataset.page='backdated-sales';button.innerHTML='<span>↶</span>ลงขายย้อนหลัง';document.querySelector('#nav [data-page="sales"]').insertAdjacentElement('afterend',button);
  const previousRender=render;render=function(){if(!currentUser)return;if(page==='backdated-sales'){document.body.classList.add('glur-backdated-screen');renderGlurBackdatedSales();if(window.glurApplyPermissionVisibility)window.glurApplyPermissionVisibility();return}document.body.classList.remove('glur-backdated-screen');previousRender()};
- const previousSet=setPage;setPage=function(p){if(p==='backdated-sales'&&!(glurAdjustRole==='owner'||glurMyPermissions.sales_create===true)){toast('บัญชีนี้ไม่มีสิทธิ์บันทึกยอดขาย');return}previousSet(p);if(p==='backdated-sales')Promise.all([loadCloudStock(),loadCloudRecipes(),glurLoadBackdatedSales()]).then(()=>{if(page===p)renderGlurBackdatedSales()})};
+ const previousSet=setPage;setPage=function(p){if(p==='backdated-sales'&&!glurIsDeveloper()){toast('บัญชีนี้ไม่มีสิทธิ์บันทึกยอดขาย');return}previousSet(p);if(p==='backdated-sales')Promise.all([loadCloudStock(),loadCloudRecipes(),glurLoadBackdatedSales()]).then(()=>{if(page===p)renderGlurBackdatedSales()})};
 })();
 
 </script>
@@ -2777,5 +2781,6 @@ function renderGlurBackdatedSales(){
 </style>
 </body>
 </html>
+
 
 
