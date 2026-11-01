@@ -26,3 +26,11 @@ END LOOP; RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION glur_private.refresh_prebatch_catalog_estimate() FROM PUBLIC,anon,authenticated;
 CREATE TRIGGER glur_refresh_catalog_prebatch_cost AFTER INSERT OR UPDATE ON public.glur_cost_catalog_history FOR EACH ROW EXECUTE FUNCTION glur_private.refresh_prebatch_catalog_estimate();
+DO $patch$ DECLARE def text; BEGIN
+SELECT pg_get_functiondef(oid) INTO def FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname='glur_produce_prebatch';
+def:=replace(def,'role IN (''owner'',''manager'',''staff'')','role IN (''owner'',''manager'',''staff'',''supervisor'')');
+IF position('GLUR_TEST_PRODUCTION_GATE' IN def)=0 THEN
+def:=replace(def,'IF NOT FOUND THEN RAISE EXCEPTION ''Recipe not found''; END IF;','IF NOT FOUND THEN RAISE EXCEPTION ''Recipe not found''; END IF; /* GLUR_TEST_PRODUCTION_GATE */ IF v_r.shop_id=''e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af''::uuid AND NOT glur_private.is_developer(v_r.shop_id) THEN RAISE EXCEPTION ''Developer only: TEST''; END IF;');
+END IF;
+EXECUTE def;
+END $patch$;
