@@ -2234,25 +2234,63 @@ async function glurLoadActivity(){
  }catch(e){glurActivityRows=[];glurActivityError=e.message||String(e)}
  finally{glurActivityBusy=false;if(page==='activity-audit')renderGlurActivity()}
 }
+
+function glurActivitySummary(x){
+ const before=x.details?.before||{},after=x.details?.after||{},row=x.action==='DELETE'?before:after;
+ const categories={glur_stock:'วัตถุดิบ',glur_sales:'ยอดขาย',glur_stock_receipts:'รับเข้าสต๊อก',glur_expenses:'ค่าใช้จ่าย',glur_daily_closings:'ปิดยอด',glur_recipes:'สูตรเครื่องดื่ม',glur_recipe_ingredients:'ส่วนผสมสูตร',glur_recipe_nonstock_ingredients:'ส่วนผสมนอกสต๊อก',glur_prebatch_recipes:'สูตร Pre-batch',glur_prebatch_batches:'การผลิต Pre-batch',glur_prebatch_ingredients:'ส่วนผสม Pre-batch',glur_prebatch_nonstock_ingredients:'ส่วนผสมนอกสต๊อก Pre-batch',glur_employee_profiles:'ข้อมูลพนักงาน',glur_members:'สิทธิ์พนักงาน',glur_cost_history:'ต้นทุนวัตถุดิบ',glur_cost_catalog:'ราคาส่วนผสม',glur_cost_catalog_history:'ราคาส่วนผสม',glur_recipe_cost_versions:'ต้นทุนสูตร',glur_member_permissions:'สิทธิ์การใช้งาน'};
+ const category=categories[x.entity_table]||'ข้อมูลร้าน';
+ const find=(items,id)=>items.find(v=>String(v.id)===String(id));
+ const stock=find(cloudStock,row.stock_id||row.output_stock_id||(x.entity_table==='glur_stock'?x.entity_id:null));
+ const recipe=find(cloudRecipes,row.recipe_id)||find(pbRecipes,row.recipe_id);
+ const snapshot=glurActivityRows.flatMap(v=>[v.details?.after,v.details?.before]).find(v=>v&&v.id===(row.stock_id||row.recipe_id)&&v.name);
+ const name=row.name||row.recipe_name||row.display_name||row.username||stock?.name||recipe?.name||snapshot?.name||'';
+ const action=({INSERT:'เพิ่ม',UPDATE:'แก้ไข',DELETE:'ลบ'})[x.action]||'บันทึก';
+ const lines=[],fmt=v=>Number(v).toLocaleString('th-TH',{maximumFractionDigits:4}),unit=row.unit||stock?.unit||'';
+ const textValue=v=>typeof v==='boolean'?(v?'เปิด':'ปิด'):String(v??'—');
+ if(x.action==='UPDATE'){
+  for(const [key,label] of [['quantity','สต๊อก'],['quantity_sold','จำนวนขาย'],['produced_qty','ผลผลิต'],['standard_yield','ผลผลิตต่อสูตร']]){
+   if(before[key]!=null&&after[key]!=null&&Number.isFinite(Number(before[key]))&&Number.isFinite(Number(after[key]))&&Number(before[key])!==Number(after[key])){
+    const delta=Number(after[key])-Number(before[key]);
+    lines.push(label+' '+(delta>0?'เพิ่ม ':'ลด ')+fmt(Math.abs(delta))+(unit?' '+unit:'')+' ('+fmt(before[key])+' → '+fmt(after[key])+')');
+   }
+  }
+ }else{
+  const q=row.quantity??row.quantity_sold??row.produced_qty;
+  if(q!=null&&Number.isFinite(Number(q)))lines.push('จำนวน '+fmt(q)+(unit?' '+unit:''));
+  if(row.standard_yield!=null)lines.push('ผลผลิตต่อสูตร '+fmt(row.standard_yield)+(unit?' '+unit:''));
+ }
+ const moneyFields={cost_per_unit:'ต้นทุนต่อหน่วย',purchase_price:'ราคาซื้อ',selling_price:'ราคาขาย',total_cost:'ต้นทุนรวม',total_amount:'ยอดขาย',amount:'จำนวนเงิน',cogs:'ต้นทุนขาย',gross_profit:'กำไรขั้นต้น',expenses:'ค่าใช้จ่าย',profit_after_expenses:'กำไรหลังหักค่าใช้จ่าย'};
+ for(const [key,label] of Object.entries(moneyFields)){
+  if(x.action==='UPDATE'){if(before[key]!=null&&after[key]!=null&&Number(before[key])!==Number(after[key]))lines.push(label+' '+money(before[key])+' → '+money(after[key]));}
+  else if(row[key]!=null)lines.push(label+' '+money(row[key]));
+ }
+ const fields={name:'ชื่อ',display_name:'ชื่อพนักงาน',username:'ไอดี',unit:'หน่วย',role:'ตำแหน่ง',is_active:'สถานะใช้งาน',min_quantity:'แจ้งเตือนเมื่อเหลือ',package_size:'ขนาดบรรจุ',note:'หมายเหตุ',notes:'หมายเหตุ',description:'คำอธิบาย',method:'วิธีทำ',garnish:'ของตกแต่ง',status:'สถานะ',supplier:'ผู้ให้ / ซัพพลายเออร์',effective_on:'วันที่เริ่มใช้',effective_date:'วันที่เริ่มใช้',business_date:'วันทำการ',receipt_kind:'ประเภทรายการรับเข้า'};
+ const words={owner:'เจ้าของร้าน',manager:'ผู้จัดการ',staff:'พนักงาน',supervisor:'หัวหน้างาน',gift:'ของฟรี',purchase:'ซื้อเข้า',pending:'รอตรวจสอบ',approved:'อนุมัติ',rejected:'ไม่อนุมัติ'};
+ const display=v=>words[String(v)]||textValue(v);
+ for(const [key,label] of Object.entries(fields)){
+  if(x.action==='UPDATE'){
+   if(JSON.stringify(before[key])!==JSON.stringify(after[key])&&(before[key]!=null||after[key]!=null))lines.push(label+' '+display(before[key])+' → '+display(after[key]));
+  }else if(['note','notes','supplier','receipt_kind','business_date'].includes(key)&&row[key])lines.push(label+' '+display(row[key]));
+ }
+ if(x.action==='UPDATE'&&!lines.length)lines.push('อัปเดต'+category);
+ return {title:action+category+(name?' · '+name:''),lines};
+}
+
 function renderGlurActivity(){
  if(!glurIsDeveloper()){shell('Employee Activity','<div class="hint">เฉพาะนักพัฒนา เท่านั้น</div>');return}
  const choices=[['all','ทุกหมวด'],['glur_sales','ยอดขาย'],['glur_stock','สต๊อก'],['glur_stock_receipts','รับเข้า'],['glur_expenses','ค่าใช้จ่าย'],['glur_daily_closings','ปิดยอด'],['glur_recipes','สูตรเครื่องดื่ม'],['glur_prebatch_recipes','Pre-batch'],['glur_prebatch_batches','การผลิต Pre-batch'],['glur_employee_profiles','ชื่อพนักงาน'],['glur_members','สิทธิ์พนักงาน']];
  const previous=document.getElementById('glurActivityFilter')?.value||'all';
- const actionNames={INSERT:'เพิ่ม',UPDATE:'แก้ไข',DELETE:'ลบ'};
  const rows=glurActivityRows.map(x=>{
-  const who=x.actor_display_name||x.actor_username||'ไม่ทราบผู้ทำรายการ';
-  const details=x.details||{};
-  const safe=(v)=>esc(JSON.stringify(v??{},null,2));
-  return `<div class="card"><div class="row between"><strong>${esc(actionNames[x.action]||x.action)} · ${esc(x.entity_table)}</strong><span class="small muted">#${esc(x.id)}</span></div>
-   <div class="small muted">${esc(glurActivityDate(x.happened_at))} · ${esc(who)} ${x.actor_username?'(@'+esc(x.actor_username)+')':''} · ${esc(x.actor_role||'ไม่ระบุตำแหน่ง')}</div>
-   <div class="small muted">รหัสรายการ: ${esc(x.entity_id||'—')} · ผู้ทำรายการ ID: ${esc(x.actor_user_id||'ไม่ทราบ')}</div>
-   <details><summary class="small">ดูรายละเอียดก่อน/หลัง</summary><div class="small muted">ก่อน:</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">${safe(details.before)}</pre><div class="small muted">หลัง:</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">${safe(details.after)}</pre></details></div>`
+  const summary=glurActivitySummary(x);
+  const who=x.actor_username?'@'+x.actor_username:(x.actor_display_name||'ไม่ทราบไอดี');
+  const displayName=x.actor_username&&x.actor_display_name&&x.actor_display_name!==x.actor_username?' · '+x.actor_display_name:'';
+  return `<div class="card"><strong>${esc(who+displayName)}</strong><div style="margin-top:6px">${esc(summary.title)}</div>${summary.lines.map(line=>`<div class="small" style="margin-top:4px;overflow-wrap:anywhere">${esc(line)}</div>`).join('')}<div class="small muted" style="margin-top:8px">${esc(glurActivityDate(x.happened_at))}</div></div>`;
  }).join('');
- shell('กิจกรรมพนักงาน',`<div class="hint">อ่านอย่างเดียว · เฉพาะนักพัฒนา · แสดง 300 รายการล่าสุด · เริ่มบันทึกตั้งแต่วันที่ติดตั้ง SQL (ไม่สร้างประวัติย้อนหลัง)</div>
+ shell('กิจกรรมพนักงาน',`<div class="hint">แสดงไอดีผู้ทำรายการ สิ่งที่เปลี่ยน และวันเวลา · 300 รายการล่าสุด</div>
  <div class="card"><div class="field"><label>หมวดรายการ</label><select id="glurActivityFilter">${choices.map(([v,t])=>`<option value="${v}" ${v===previous?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
  <button class="btn full" id="glurActivityRefresh" ${glurActivityBusy?'disabled':''}>${glurActivityBusy?'กำลังโหลด…':'↻ โหลดประวัติ'}</button>${glurActivityError?`<div class="hint warn">${esc(glurActivityError)}</div>`:''}</div>
  <div class="section-title">กิจกรรมล่าสุด (${glurActivityRows.length})</div>${rows||empty('ยังไม่มีกิจกรรมหลังติดตั้ง หรือไม่พบรายการในหมวดนี้')}
- <div class="hint">การบันทึกจาก service role อาจไม่ทราบผู้ทำรายการ · ระบบไม่บันทึกรหัสผ่านหรือ Token · การอ่านประวัติไม่เปลี่ยนสต๊อกหรือยอดขาย</div>`);
+ <div class="hint">รายการที่ระบบทำอัตโนมัติอาจไม่ระบุไอดีผู้ทำรายการ</div>`);
  document.getElementById('glurActivityRefresh').onclick=glurLoadActivity;
  document.getElementById('glurActivityFilter').onchange=glurLoadActivity;
 }
