@@ -1641,6 +1641,16 @@ function pbRender(){
  if(mayEdit)document.getElementById('pbCreate').onclick=()=>{pbMode='create';pbRender()};
  document.querySelectorAll('[data-pb-produce]').forEach(b=>b.onclick=()=>{pbSelected=b.dataset.pbProduce;pbMode='produce';pbRender()});
 }
+function glurPrebatchInputError(name,output,items){
+ if(name.length<2)return 'ชื่อสูตรต้องมีอย่างน้อย 2 ตัวอักษร';
+ if(!output)return 'เลือกสต๊อกผลผลิตก่อน';
+ if(!items.length)return 'เพิ่มวัตถุดิบอย่างน้อย 1 รายการ';
+ const bad=items.findIndex(i=>!i.stock_id||!Number.isFinite(i.quantity)||i.quantity<=0);
+ if(bad>=0)return 'ตรวจสอบวัตถุดิบและปริมาณแถวที่ '+(bad+1);
+ if(items.some(i=>i.stock_id===output))return 'สต๊อกผลผลิตต้องแยกจากวัตถุดิบที่นำมาผลิต';
+ if(new Set(items.map(i=>i.stock_id)).size!==items.length)return 'มีวัตถุดิบซ้ำ กรุณารวมปริมาณไว้ในแถวเดียว';
+ return '';
+}
 function pbRenderCreate(){
  if(!['owner','manager','supervisor'].includes(glurAdjustRole)){pbMode='list';pbRender();return}
  const options=cloudStock.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} (${esc(s.unit)})</option>`).join('');
@@ -1650,8 +1660,8 @@ function pbRenderCreate(){
  const add=()=>{const d=document.createElement('div');d.className='ingredient-row';d.innerHTML=`<select required><option value="">เลือกวัตถุดิบ</option>${options}</select><input type="number" min="0.000001" step="any" required><button type="button" class="btn danger smallbtn">×</button>`;d.querySelector('button').onclick=()=>d.remove();rows.appendChild(d)};add();document.getElementById('pbAdd').onclick=add;
  document.getElementById('pbCreateForm').onsubmit=async e=>{
   e.preventDefault();if(pbBusy)return;const f=e.target,name=f.elements.name.value.trim(),output=f.elements.output.value;
-  const items=[...rows.children].map(d=>({stock_id:d.children[0].value,quantity:Number(d.children[1].value)}));let extras;try{extras=getNonstock()}catch(err){toast(err.message);return}
-  if(!name||!output||!items.length||items.some(i=>!i.stock_id||!Number.isFinite(i.quantity)||i.quantity<=0||i.stock_id===output)||new Set(items.map(i=>i.stock_id)).size!==items.length){toast('ตรวจสอบวัตถุดิบ ห้ามซ้ำหรือใช้สต๊อกผลผลิตเป็นส่วนผสม');return}
+  const items=[...rows.children].map(d=>({stock_id:d.querySelector('select').value,quantity:Number(d.querySelector('input[type=number]').value)}));let extras;try{extras=getNonstock()}catch(err){toast(err.message);return}
+  const validationError=glurPrebatchInputError(name,output,items);if(validationError){toast(validationError);return}
   pbBusy=true;const btn=f.querySelector('[type=submit]');btn.disabled=true;
   try{const {data:newId,error}=await glurSupabase.rpc('glur_save_prebatch_recipe',{p_shop_id:GLUR_SHOP_ID,p_name:name,p_output_stock_id:output,p_notes:f.elements.notes.value.trim(),p_ingredients:items});if(error)throw error;await nsSave('glur_prebatch_nonstock_ingredients',newId,extras);toast('สร้างสูตร Pre-batch แล้ว');pbMode='list';await pbLoad()}
   catch(err){toast('สร้างสูตรไม่ได้: '+(err.message||err))}finally{pbBusy=false;btn.disabled=false}
@@ -1671,8 +1681,8 @@ function pbRenderEdit(){
  document.getElementById('pbEditForm').onsubmit=async e=>{
   e.preventDefault();if(pbBusy)return;
   const f=e.target,name=f.elements.name.value.trim(),output=produced?r.output_stock_id:f.elements.output.value;
-  const items=[...rows.children].map(d=>({stock_id:d.children[0].value,quantity:Number(d.children[1].value)}));let extras;try{extras=getNonstock()}catch(err){toast(err.message);return}
-  if(name.length<2||!output||!items.length||items.some(i=>!i.stock_id||!Number.isFinite(i.quantity)||i.quantity<=0||i.stock_id===output)||new Set(items.map(i=>i.stock_id)).size!==items.length){toast('ตรวจสอบวัตถุดิบ ห้ามซ้ำหรือใช้สต๊อกผลผลิตเป็นส่วนผสม');return}
+  const items=[...rows.children].map(d=>({stock_id:d.querySelector('select').value,quantity:Number(d.querySelector('input[type=number]').value)}));let extras;try{extras=getNonstock()}catch(err){toast(err.message);return}
+  const validationError=glurPrebatchInputError(name,output,items);if(validationError){toast(validationError);return}
   if(!confirm('ยืนยันแก้ไขสูตร '+name+' สำหรับการผลิตครั้งถัดไป?'))return;
   pbBusy=true;const btn=f.querySelector('[type=submit]');btn.disabled=true;
   try{const {error}=await glurSupabase.rpc('glur_update_prebatch_recipe',{p_recipe_id:r.id,p_name:name,p_output_stock_id:output,p_notes:f.elements.notes.value.trim(),p_ingredients:items});if(error)throw error;await nsSave('glur_prebatch_nonstock_ingredients',r.id,extras);toast('แก้ไขสูตร Pre-batch แล้ว');pbMode='produce';await pbLoad()}
@@ -2820,6 +2830,7 @@ function glurClosingRevisionLabel(x){return x.cost_revised_at?`<details class="h
 </script>
 </body>
 </html>
+
 
 
 
