@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
     if (developerError) return json({ error: "Developer check failed" }, 503);
     const developerIds = new Set((developers ?? []).map((d) => d.user_id));
     const isDeveloper = developerIds.has(authData.user.id);
+    if(shop_id==="e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af" && !isDeveloper) return json({error:"Developer only: TEST"},403);
 
     if (action === "list") {
       const { data: members, error } = await admin.from("glur_members")
