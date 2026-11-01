@@ -1,0 +1,44 @@
+BEGIN;
+SELECT set_config('request.jwt.claim.sub','7309615b-5500-4c7b-a646-8b25e8d9ca07',true);
+SET LOCAL ROLE authenticated;
+DO $qa$
+DECLARE shop uuid; stock uuid; output uuid; recipe uuid; pb uuid; sale uuid; closing uuid; expense uuid; key uuid; duplicate uuid; cost numeric; before_cogs numeric; n integer; today date:=((now() AT TIME ZONE 'Asia/Bangkok')-interval '3 hours')::date;
+BEGIN
+FOREACH shop IN ARRAY ARRAY['bdd83213-8d38-42d7-bd35-835506dc25ac'::uuid,'e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af'::uuid] LOOP
+stock:=gen_random_uuid();output:=gen_random_uuid();recipe:=gen_random_uuid();expense:=gen_random_uuid();
+INSERT INTO public.glur_stock(id,shop_id,name,unit,quantity,cost_per_unit) VALUES(stock,shop,'PARITY QA input','ml',10000,0.1),(output,shop,'PARITY QA output','ml',0,0);
+INSERT INTO public.glur_cost_history(shop_id,stock_id,effective_on,cost_per_unit,note) VALUES(shop,stock,today-5,0.3,'QA effective price');
+INSERT INTO public.glur_recipes(id,shop_id,name,selling_price) VALUES(recipe,shop,'PARITY QA recipe',100);
+INSERT INTO public.glur_recipe_ingredients(shop_id,recipe_id,stock_id,quantity) VALUES(shop,recipe,stock,30);
+key:=gen_random_uuid();sale:=public.glur_record_sale_safe(shop,recipe,2,'Parity QA',key);
+duplicate:=public.glur_record_sale_safe(shop,recipe,2,'Parity QA',key);
+IF duplicate<>sale OR (SELECT quantity FROM public.glur_stock WHERE id=stock)<>9940 OR (SELECT total_cost FROM public.glur_sales WHERE id=sale)<>18 THEN RAISE EXCEPTION 'Sale/retry/effective cost failed %',shop;END IF;
+PERFORM public.glur_receive_stock_v2(shop,stock,700,0,'gift','QA supplier','Parity QA','keep',gen_random_uuid());
+IF (SELECT quantity FROM public.glur_stock WHERE id=stock)<>10640 THEN RAISE EXCEPTION 'Gift failed';END IF;
+pb:=public.glur_save_prebatch_recipe(shop,'PARITY QA batch',output,'QA',jsonb_build_array(jsonb_build_object('stock_id',stock,'quantity',700)));
+cost:=public.glur_set_prebatch_standard_yield(pb,700);
+IF cost<>0.3 THEN RAISE EXCEPTION 'Estimated price mismatch %',cost;END IF;
+PERFORM public.glur_produce_prebatch(pb,1,700,'QA rollback');
+IF (SELECT quantity FROM public.glur_stock WHERE id=output)<>700 OR (SELECT cost_per_unit FROM public.glur_stock WHERE id=output)<>0.3 THEN RAISE EXCEPTION 'Production cost mismatch';END IF;
+PERFORM public.glur_record_backdated_sale(shop,recipe,1,'QA forgotten sale',today-2,gen_random_uuid());
+IF (SELECT quantity FROM public.glur_stock WHERE id=stock)<>9910 THEN RAISE EXCEPTION 'Backdated stock mismatch';END IF;
+INSERT INTO public.glur_expenses(id,shop_id,name,amount,expense_date) VALUES(expense,shop,'PARITY QA expense',10,today);
+PERFORM public.glur_cancel_expense(expense,'Parity QA cancellation');
+IF (SELECT cancelled_at FROM public.glur_expenses WHERE id=expense) IS NULL THEN RAISE EXCEPTION 'Expense cancellation failed';END IF;
+closing:=public.glur_close_business_day(shop,today,'PARITY QA rollback closing');
+SELECT cogs INTO before_cogs FROM public.glur_daily_closings WHERE id=closing;
+UPDATE public.glur_recipe_ingredients SET quantity=20 WHERE recipe_id=recipe AND shop_id=shop;
+n:=public.glur_save_recipe_cost_version(shop,recipe,today,'PARITY QA actual formula correction');
+IF (SELECT total_cost FROM public.glur_sales WHERE id=sale)<>12 OR (SELECT cogs FROM public.glur_daily_closings WHERE id=closing)<>before_cogs-6 THEN RAISE EXCEPTION 'Closing correction failed %',shop;END IF;
+IF (SELECT quantity FROM public.glur_stock WHERE id=stock)<>9910 THEN RAISE EXCEPTION 'Correction moved stock';END IF;
+PERFORM public.glur_profit_report(shop,today-2,today);
+PERFORM public.glur_monthly_report(shop,date_trunc('month',today)::date);
+PERFORM public.glur_read_monthly_stock(shop,date_trunc('month',today)::date);
+IF NOT (public.glur_my_permissions(shop)->>'system_developer')::boolean THEN RAISE EXCEPTION 'Developer permission failed'; END IF;
+PERFORM public.glur_employee_profiles_list(shop);
+PERFORM public.glur_set_recipe_active(shop,recipe,false);
+PERFORM public.glur_set_recipe_active(shop,recipe,true);
+END LOOP;
+END $qa$;
+SELECT 'PASS BOTH SCOPES: stock, effective prices, recipes, sales/retries, gift, standard yield, production, backdated sales, expense cancellation, closings, cost revisions, monthly/profit reports, profiles and permissions' AS result;
+ROLLBACK;
