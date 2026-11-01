@@ -47,12 +47,13 @@ Deno.serve(async (req) => {
       const { data: members, error } = await admin.from("glur_members")
         .select("user_id,role,created_at").eq("shop_id", shop_id).order("created_at");
       if (error) return json({ error: "Unable to list members" }, 500);
-      const ids = (members ?? []).map((m) => m.user_id);
+      const visibleMembers = (members ?? []).filter((m) => isDeveloper || !developerIds.has(m.user_id));
+      const ids = visibleMembers.map((m) => m.user_id);
       const { data: usernames, error: namesError } = await admin.from("glur_usernames")
         .select("user_id,username").in("user_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
       if (namesError) return json({ error: "Unable to list usernames" }, 500);
       const names = new Map((usernames ?? []).map((u) => [u.user_id, u.username]));
-      return json({ members: (members ?? []).map((m) => ({ ...m, username: names.get(m.user_id) ?? null, is_developer: developerIds.has(m.user_id), display_role: developerIds.has(m.user_id) ? "developer" : m.role })) });
+      return json({ members: visibleMembers.map((m) => ({ ...m, username: names.get(m.user_id) ?? null, is_developer: developerIds.has(m.user_id), display_role: developerIds.has(m.user_id) ? "developer" : m.role })) });
     }
 
     if (action === "create") {
