@@ -1,0 +1,2 @@
+CREATE POLICY glur_activity_developer_gate ON public.glur_activity_audit AS RESTRICTIVE FOR SELECT TO authenticated USING (public.glur_is_developer(shop_id));
+CREATE POLICY glur_adjustment_history_developer_gate ON public.glur_sale_adjustments AS RESTRICTIVE FOR SELECT TO authenticated USING (public.glur_is_developer(shop_id));
