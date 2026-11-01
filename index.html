@@ -2332,16 +2332,18 @@ glurLoadAdjustmentAccess=async function(){await glurRoleLoadAccess();if(currentU
 // NOTE: this is UI/data-fetch minimization, not a substitute for DB row/column access controls.
 function glurStage3IsFinanceRole(){return glurAdjustRole==='owner'||glurAdjustRole==='manager'}
 function glurStage3OperationalDashboard(){
- const month=monthNow();
- const qty=glurSalesReady ? glurSales.filter(s=>String(s.sold_at||s.created_at||'').slice(0,7)===month)
-   .reduce((n,s)=>n+(Number(s.quantity_sold)||1),0) : null;
- const low=cloudStock.filter(s=>num(s.quantity)<=num(s.min_quantity));
- shell('ภาพรวมงานประจำวัน',`<div class="muted small">${esc(month)} · สำหรับ Staff</div>
- <div class="grid" style="margin-top:12px">${metric('จำนวนแก้วที่ขายเดือนนี้',qty===null?'กำลังโหลด…':qty.toLocaleString('th-TH'))}${metric('รายการสต๊อกใกล้หมด',String(low.length))}</div>
- <div class="section-title">สต๊อกใกล้หมด</div><div class="card">${low.length?low.map(s=>`<div class="item"><div class="item-name">${esc(s.name)}</div><strong class="warn">${num(s.quantity)} ${esc(s.unit)}</strong></div>`).join(''):empty('ไม่มีรายการสต๊อกใกล้หมด')}</div>
- <div class="section-title">ทางลัด</div><div class="grid"><button class="btn secondary" onclick="setPage('sales')">ขาย</button><button class="btn secondary" onclick="setPage('receiving')">รับสินค้า</button><button class="btn secondary" onclick="setPage('closing')">ปิดยอด</button></div>
- <div class="hint">สำหรับ Staff แสดงจำนวนแก้วและสต๊อกเท่านั้น ไม่แสดงยอดเงิน ต้นทุน หรือกำไร</div>`);
+ const allowed=key=>window.glurHasCurrentPermission?.(key)===true;
+ const month=monthNow(),showStock=allowed('stock_view'),showSales=['sales_create','sales_edit','sales_cancel'].some(allowed);
+ const qty=glurSalesReady ? glurSales.filter(s=>String(s.sold_at||s.created_at||'').slice(0,7)===month).reduce((n,s)=>n+(Number(s.quantity_sold)||1),0) : null;
+ const low=showStock?cloudStock.filter(s=>num(s.quantity)<=num(s.min_quantity)):[];
+ const shortcuts=[['stock_view','stock','ดูสต๊อก'],['stock_create','stock','เพิ่มวัตถุดิบ'],['stock_waste','stock','จัดการของเสีย'],['recipes_view','recipes','ดูสูตร'],['sales_create','sales','ขาย'],['sales_edit','sales','แก้ไขยอดขาย'],['sales_cancel','sales','ยกเลิกยอดขาย'],['receiving_manage','receiving','รับสินค้า'],['closing_manage','closing','ปิดยอด']]
+  .filter(([key])=>allowed(key));
+ shell('ภาพรวมงานประจำวัน',`<div class="muted small">${esc(month)}</div>
+ <div class="grid" style="margin-top:12px">${showSales?metric('จำนวนแก้วที่ขายเดือนนี้',qty===null?'กำลังโหลด…':qty.toLocaleString('th-TH')):''}${showStock?metric('รายการสต๊อกใกล้หมด',String(low.length)):''}</div>
+ ${showStock?`<div class="section-title">สต๊อกใกล้หมด</div><div class="card">${low.length?low.map(s=>`<div class="item"><div class="item-name">${esc(s.name)}</div><strong class="warn">${num(s.quantity)} ${esc(s.unit)}</strong></div>`).join(''):empty('ไม่มีรายการสต๊อกใกล้หมด')}</div>`:''}
+ ${shortcuts.length?`<div class="section-title">ทางลัด</div><div class="grid">${shortcuts.map(([key,target,label])=>`<button class="btn secondary" data-glur-shortcut="${key}" onclick="setPage('${target}')">${label}</button>`).join('')}</div>`:'<div class="hint">ยังไม่มีทางลัดที่ได้รับสิทธิ์</div>'}`);
 }
+
 const glurStage3OldDashboard=renderDashboard;
 renderDashboard=function(){if(glurAdjustRole==='staff')return glurStage3OperationalDashboard();return glurStage3OldDashboard()};
 const glurStage3OldFinanceLoad=glurLoadFinance;
@@ -2701,11 +2703,17 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
  const rules={'backdated-sales':['system_developer'],stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
  let ready=false;
  const has=k=>glurAdjustRole==='owner'||(ready&&glurMyPermissions?.[k]===true);
- const can=p=>['backdated-sales','activity-audit','audit'].includes(p)?glurIsDeveloper():!rules[p]||(!ready&&glurAdjustRole!=='owner')||rules[p].some(has);
+ const can=p=>['backdated-sales','activity-audit','audit'].includes(p)?glurIsDeveloper():!rules[p]||rules[p].some(has);
+ window.glurHasCurrentPermission=has;
  const hide=(el,yes)=>{if(el){el.classList.toggle('hidden',yes);if(yes)el.style.setProperty('display','none','important');else el.style.removeProperty('display')}};
  function apply(){
   if(!currentUser)return;
   document.querySelectorAll('#nav button[data-page]').forEach(b=>{const p=b.dataset.page;if(rules[p])hide(b,!can(p))});
+  document.querySelectorAll('#app button[onclick],#app a[onclick]').forEach(el=>{
+   const match=(el.getAttribute('onclick')||'').match(/setPage\(['"]([a-z-]+)['"]\)/);
+   if(match)hide(el,!can(match[1]));
+  });
+  document.querySelectorAll('#app [data-glur-shortcut]').forEach(el=>hide(el,!has(el.dataset.glurShortcut)));
   document.querySelectorAll('#nav .nav-group').forEach(g=>{let n=g.nextElementSibling,visible=false;while(n&&!n.classList.contains('nav-group')){if(n.matches('button[data-page]')&&getComputedStyle(n).display!=='none')visible=true;n=n.nextElementSibling}hide(g,!visible)});
   if(!can(page)){const old=page;page='dashboard';document.querySelectorAll('#nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page==='dashboard'));if(old!=='dashboard')render();return}
   if(page==='stock'||page==='recipes'){
@@ -2719,7 +2727,7 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
  const oldRender=render;
  render=function(){if(!can(page)){page='dashboard'}oldRender();document.querySelectorAll('#nav button[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));apply()};
  const oldLoad=glurLoadMyPermissions;
- glurLoadMyPermissions=async function(){ready=false;try{await oldLoad()}finally{ready=true;apply()}};
+ glurLoadMyPermissions=async function(){ready=false;try{await oldLoad()}finally{ready=true;if(currentUser&&page==='dashboard')render();else apply()}};
  const oldAuth=showAuthenticated;
  showAuthenticated=function(u){ready=false;oldAuth(u);apply()};
  // Recheck on tab return; avoid showing privileged controls after a role change.
