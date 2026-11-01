@@ -2879,6 +2879,67 @@ input,select,textarea{font-size:16px!important;min-height:44px;padding:10px 11px
 <script>
 function glurClosingRevisionLabel(x){return x.cost_revised_at?`<details class="hint"><summary>ปรับต้นทุนตามสูตรที่แก้แล้ว</summary><div>ต้นทุนก่อนแก้ ${money(x.original_cogs)} → ปัจจุบัน ${money(x.cogs)}</div><div>เหตุผล: ${esc(x.cost_revision_note)}</div><div class="small muted">แก้ล่าสุด ${esc(new Date(x.cost_revised_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))}</div></details>`:''}
 </script>
+
+<script id="glur-recipe-import-v1">
+(function(){
+ function addImportButton(kind){
+  if(!glurIsDeveloper()||GLUR_SHOP_ID!==GLUR_LIVE_SHOP_ID||document.getElementById('glurImportTestRecipe'))return;
+  const app=document.getElementById('app'),button=document.createElement('button');
+  button.id='glurImportTestRecipe';button.className='btn secondary full';button.style.marginBottom='12px';
+  button.textContent='⇩ ดึงสูตรจาก TEST';button.onclick=()=>openImport(kind);
+  app.insertBefore(button,app.children[1]||null);
+ }
+ const oldRecipes=renderRecipes;renderRecipes=function(){oldRecipes.apply(this,arguments);if(!recipeDetailId)addImportButton('cocktail')};
+ const oldPb=pbRender;pbRender=function(){oldPb.apply(this,arguments);if(pbMode==='list')addImportButton('prebatch')};
+ async function openImport(kind){
+  if(!glurIsDeveloper()||GLUR_SHOP_ID!==GLUR_LIVE_SHOP_ID)return;
+  document.getElementById('glurImportDialog')?.remove();
+  const dialog=document.createElement('dialog');dialog.id='glurImportDialog';
+  dialog.style.cssText='width:calc(100% - 24px);max-width:520px;max-height:85dvh;overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;padding:16px';
+  dialog.innerHTML='<div class="row between"><strong>ดึงสูตร '+(kind==='cocktail'?'ค็อกเทล':'Pre-batch')+' จาก TEST</strong><button type="button" class="btn secondary smallbtn" data-close>ปิด</button></div><p class="small muted">จับคู่ชื่อและหน่วยส่วนผสมให้ตรงกับ LIVE ทุกตัว รวมส่วนผสมนอกสต๊อกและสต๊อกผลผลิต ใช้ต้นทุนของ LIVE</p><div class="field"><label>เลือกสูตรใน TEST</label><select data-recipe disabled><option>กำลังโหลด…</option></select></div><div data-preview style="margin-top:12px"></div><button type="button" class="btn full" data-import disabled style="margin-top:12px">ดึงสูตรมาใช้ใน LIVE</button>';
+  document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();
+  const select=dialog.querySelector('[data-recipe]'),preview=dialog.querySelector('[data-preview]'),button=dialog.querySelector('[data-import]');
+  let selected=null,serial=0,busy=false;
+  try{
+   let q=glurSupabase.from(kind==='cocktail'?'glur_recipes':'glur_prebatch_recipes').select('id,name').eq('shop_id',GLUR_TEST_SHOP_ID).order('name');
+   if(kind==='cocktail')q=q.eq('is_active',true);
+   const {data,error}=await q;if(error)throw error;if(!dialog.isConnected)return;
+   select.innerHTML='<option value="">— เลือกสูตร —</option>'+(data||[]).map(r=>'<option value="'+esc(r.id)+'">'+esc(r.name)+'</option>').join('');
+   select.disabled=false;if(!data?.length)preview.textContent='ยังไม่มีสูตรใน TEST';
+  }catch(e){preview.textContent='โหลดสูตรไม่ได้: '+(e.message||e);return}
+  select.onchange=async()=>{
+   const request=++serial;selected=null;button.disabled=true;preview.textContent=select.value?'กำลังตรวจชื่อส่วนผสม…':'';
+   if(!select.value)return;
+   try{
+    const {data,error}=await glurSupabase.rpc('glur_import_test_recipe',{p_kind:kind,p_recipe_id:select.value,p_apply:false,p_replace:false});
+    if(error)throw error;if(request!==serial||!dialog.isConnected)return;selected=data;
+    preview.innerHTML='<strong>'+esc(data.name)+'</strong><div class="small" style="margin-top:8px">'+(data.ingredients||[]).map(n=>'<div>✓ '+esc(n)+'</div>').join('')+'</div>'+
+     (data.issues||[]).map(n=>'<div class="hint warn">'+esc(n)+'</div>').join('')+
+     (data.ready?'<div class="hint">ส่วนผสมตรงกันครบ พร้อมดึงมาใช้</div>':'')+
+     (data.existing?'<label class="small" style="display:flex;align-items:flex-start;gap:8px;margin-top:10px"><input type="checkbox" data-replace style="width:20px;min-height:20px;flex:none">แทนที่สูตรชื่อเดียวกันใน LIVE สำหรับใช้งานต่อไป ประวัติยอดขายและการผลิตเดิมคงเดิม</label>':'');
+    const replacement=preview.querySelector('[data-replace]');
+    const enable=()=>button.disabled=!selected?.ready||(selected.existing&&!replacement?.checked);
+    if(replacement)replacement.onchange=enable;enable();
+   }catch(e){if(request===serial)preview.textContent='ตรวจสอบไม่ได้: '+(e.message||e)}
+  };
+  button.onclick=async()=>{
+   if(busy||!selected?.ready||GLUR_SHOP_ID!==GLUR_LIVE_SHOP_ID)return;
+   const replace=!!preview.querySelector('[data-replace]')?.checked;
+   if(selected.existing&&!replace)return;
+   if(!confirm((replace?'แทนที่':'เพิ่ม')+'สูตร '+selected.name+' ใน LIVE?\nดึงเฉพาะสูตร ใช้วัตถุดิบและต้นทุนของ LIVE'))return;
+   busy=true;button.disabled=true;select.disabled=true;
+   try{
+    const {error}=await glurSupabase.rpc('glur_import_test_recipe',{p_kind:kind,p_recipe_id:select.value,p_apply:true,p_replace:replace});if(error)throw error;
+    dialog.close();toast('ดึงสูตรมาใช้ใน LIVE แล้ว');
+    if(kind==='cocktail')await loadCloudRecipes();else await pbLoad();
+   }catch(e){preview.textContent='ดึงสูตรไม่สำเร็จ: '+(e.message||e);button.disabled=false;select.disabled=false}
+   finally{busy=false}
+  };
+ }
+})();
+</script>
+
 </body>
 </html>
 
