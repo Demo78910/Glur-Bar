@@ -397,7 +397,7 @@ function loadDB(){return blank()}
 function saveDB(){throw Error('Legacy local writes are disabled; use Supabase')}
 function id(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function glurUnitCostMoney(n){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',minimumFractionDigits:2,maximumFractionDigits:4}).format(Number(n)||0)}
+function glurUnitCostMoney(n){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n)||0)}
 function money(n){return new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',maximumFractionDigits:2}).format(Number(n)||0)}
 function num(v){const n=Number(v);return Number.isFinite(n)?n:0}
 function dateNow(){return new Date().toISOString().slice(0,10)}
