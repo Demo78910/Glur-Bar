@@ -379,6 +379,7 @@ const blank=()=>({stock:[],recipes:[],sales:[],receipts:[],expenses:[]});
 let db=blank(),page='dashboard';
 const GLUR_LIVE_SHOP_ID='bdd83213-8d38-42d7-bd35-835506dc25ac';
 const GLUR_TEST_SHOP_ID='e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af';
+let glurModeDeveloper=false;
 let GLUR_SHOP_ID=sessionStorage.getItem('glur_selected_mode')==='TEST'?GLUR_TEST_SHOP_ID:GLUR_LIVE_SHOP_ID;
 let cloudStock=[],cloudReady=false,cloudError='';
 
@@ -2601,13 +2602,15 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
   document.body.classList.toggle('glur-test-mode',isTest());
   document.getElementById('glurModeLabel').textContent=isTest()?'🧪 TEST · ข้อมูลทดลอง':'● LIVE · ข้อมูลร้านจริง';
   document.getElementById('glurModeToggle').textContent=isTest()?'กลับ LIVE':'สลับไป TEST';
-  bar.style.display=currentUser?'flex':'none';
+  if(currentUser&&glurModeDeveloper)bar.style.removeProperty('display');else bar.style.setProperty('display','none','important');
  }
  async function toggle(){
-  if(!currentUser)return;
+  if(!currentUser||!glurModeDeveloper)return;
   const target=isTest()?'LIVE':'TEST';
   const btn=document.getElementById('glurModeToggle');btn.disabled=true;
   try{
+   const {data:developer,error:developerError}=await glurSupabase.rpc('glur_is_developer',{p_shop_id:GLUR_SHOP_ID});
+   if(developerError||developer!==true)throw Error('เฉพาะนักพัฒนาเท่านั้น');
    if(target==='TEST'){
     const {data:auth,error:authError}=await glurSupabase.auth.getUser();
     if(authError||!auth?.user)throw Error('กรุณาเข้าสู่ระบบใหม่');
@@ -2622,6 +2625,7 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
   }catch(e){alert('สลับโหมดไม่ได้: '+(e.message||e))}
   finally{btn.disabled=false}
  }
+ window.glurPaintMode=paint;
  document.getElementById('glurModeToggle').addEventListener('click',toggle);
  const previousAuth=showAuthenticated;
  showAuthenticated=function(user){previousAuth(user);paint()};
@@ -2794,8 +2798,25 @@ input,select,textarea{font-size:16px!important;min-height:44px;padding:10px 11px
 #glurTeamCreate{gap:12px}#glurTeamCreate .btn{margin-top:3px}body[data-glur-page="activity-audit"] .card>.row>strong{font-size:13px;overflow-wrap:anywhere}body[data-glur-page="activity-audit"] .small{font-size:12px;line-height:1.6}#glurActivityRefresh{margin-top:12px}
 }
 </style>
+<script>
+// Resolve mode access before any authenticated data loader starts.
+(function(){
+ const prior=showAuthenticated;let serial=0;
+ showAuthenticated=async function(user){
+  const request=++serial;
+  const {data,error}=await glurSupabase.rpc('glur_is_developer',{p_shop_id:null});
+  if(request!==serial)return;
+  glurModeDeveloper=!error&&data===true;
+  if(!glurModeDeveloper&&GLUR_SHOP_ID===GLUR_TEST_SHOP_ID){sessionStorage.setItem('glur_selected_mode','LIVE');location.reload();return}
+  prior(user);if(window.glurPaintMode)window.glurPaintMode();
+ };
+ const previousPermissions=glurLoadMyPermissions;
+ glurLoadMyPermissions=async function(...args){await previousPermissions.apply(this,args);glurModeDeveloper=glurIsDeveloper();if(!glurModeDeveloper&&GLUR_SHOP_ID===GLUR_TEST_SHOP_ID){sessionStorage.setItem('glur_selected_mode','LIVE');location.reload();return}if(window.glurPaintMode)window.glurPaintMode()};
+})();
+</script>
 </body>
 </html>
+
 
 
 
