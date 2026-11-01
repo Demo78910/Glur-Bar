@@ -421,7 +421,7 @@ function recipeCost(r){return (r.ingredients||[]).reduce((sum,x)=>{const s=stock
 function sum(arr,fn){return arr.reduce((a,x)=>a+fn(x),0)}
 function monthSales(m){return db.sales.filter(s=>(s.date||'').slice(0,7)===m)}
 function monthExpenses(m){return db.expenses.filter(x=>(x.date||'').slice(0,7)===m)}
-function shell(title,body){document.getElementById('app').innerHTML=`<div class="page-title">${title}</div>${body}`}
+function shell(title,body){document.body.dataset.glurPage=page;document.getElementById('app').innerHTML=`<div class="page-title">${title}</div>${body}`}
 function metric(label,value,sub=''){return `<div class="card"><div class="metric-label">${label}</div><div class="metric">${value}</div>${sub?`<div class="small muted">${sub}</div>`:''}</div>`}
 function empty(msg){return `<div class="empty">${msg}</div>`}
 function render(){if(!currentUser)return;const f={dashboard:renderDashboard,stock:renderStock,recipes:renderRecipes,sales:renderSales,receiving:renderReceiving,costs:renderCosts,reports:renderReports,settings:renderSettings};(f[page]||renderDashboard)();if(['recipes','sales','receiving'].includes(page)){const app=document.getElementById('app');const hint=document.createElement('div');hint.className='hint';hint.textContent='โหมดดูข้อมูลเดิม: เมนูนี้ยังไม่เชื่อมกับ Supabase จึงปิดการบันทึก/แก้ไขชั่วคราว เพื่อไม่ให้สต๊อกออนไลน์คลาดเคลื่อน';app.insertBefore(hint,app.children[1]||null);app.querySelectorAll('form input,form select,form button,.actions button').forEach(el=>el.disabled=true);}}
@@ -1436,9 +1436,9 @@ function renderGlurTeam(){
     ${glurTeamError?`<div class="hint warn">${esc(glurTeamError)}</div>`:''}
     <div class="card"><div class="section-title" style="margin-top:0">＋ สร้างบัญชีใหม่</div>
       <form id="glurTeamCreate" class="stack" autocomplete="off">
-        <div class="field"><label>Username (a-z, 0-9, _ ความยาว 3–30)</label><input name="username" required minlength="3" maxlength="30" pattern="[a-z0-9_]{3,30}" autocapitalize="off" autocomplete="off"></div>
-        <div class="field"><label>ชื่อพนักงาน (แสดงในรายงาน)</label><input name="display_name" required maxlength="100"></div>
-        <div class="field"><label>รหัสผ่านเริ่มต้น (อย่างน้อย 8 ตัว)</label><input name="password" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
+        <div class="field"><label>ชื่อผู้ใช้ (อังกฤษ / ตัวเลข / _)</label><input name="username" required minlength="3" maxlength="30" pattern="[a-z0-9_]{3,30}" autocapitalize="off" autocomplete="off"></div>
+        <div class="field"><label>ชื่อที่แสดงในรายงาน</label><input name="display_name" required maxlength="100"></div>
+        <div class="field"><label>รหัสผ่าน (อย่างน้อย 8 ตัว)</label><input name="password" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
         <div class="field"><label>ตำแหน่ง</label><select name="role">${glurIsDeveloper()?'<option value="owner">Owner · เจ้าของร้าน</option>':''}<option value="staff" selected>Staff · พนักงาน</option>${glurAdjustRole==='owner'?'<option value="manager">Manager · ผู้จัดการ</option>':''}<option value="supervisor">Supervisor · หัวหน้างาน</option></select></div>
         <button type="submit" class="btn full" ${glurTeamBusy?'disabled':''}>สร้างบัญชีพนักงาน</button>
       </form></div>
@@ -1483,7 +1483,7 @@ function renderGlurTeam(){
   });
 }
 async function glurLoadAudit(){
-  if(!glurCanAdjust())return;
+  if(!glurIsDeveloper())return;
   glurAuditError='';
   const {data,error}=await glurSupabase.from('glur_sale_adjustments')
     .select('id,sale_id,stock_id,quantity_before,quantity_after,reason,adjusted_by,created_at')
@@ -1499,7 +1499,7 @@ async function glurLoadAudit(){
   if(page==='audit')renderGlurAudit();
 }
 function renderGlurAudit(){
-  if(!glurCanAdjust()){shell('ประวัติการปรับสต๊อก','<div class="hint">เฉพาะ Owner / Manager เท่านั้น</div>');return}
+  if(!glurIsDeveloper()){shell('ประวัติการปรับสต๊อก','<div class="hint">เฉพาะ Owner / Manager เท่านั้น</div>');return}
   shell('ประวัติการปรับสต๊อก',`<div class="hint">รายการปรับปริมาณใช้จริงล่าสุด 200 รายการ · อ่านจาก Supabase · ไม่กระทบสต๊อก</div>
     ${glurAuditError?`<div class="hint warn">โหลดประวัติไม่สำเร็จ: ${esc(glurAuditError)}</div>`:''}
     <button id="glurAuditRefresh" type="button" class="btn secondary full">↻ รีเฟรชประวัติ</button>
@@ -1808,7 +1808,7 @@ function renderGlurProfit(){
  const top=menus.slice().sort((a,b)=>Number(b.qty)-Number(a.qty)).slice(0,10);
  const high=menus.filter(x=>Number(x.qty)>0).sort((a,b)=>Number(b.cogs)/Number(b.qty)-Number(a.cogs)/Number(a.qty)).slice(0,10);
  const metricLine=(label,value)=>`<div class="tableline"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
- shell('วิเคราะห์กำไร · Profit Analytics',`<div class="card"><div class="field"><label>เลือกเดือน (ตามวันทำการ 03:00–02:59 เวลาไทย)</label><input id="profitMonth" type="month" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:9px" id="profitReload">↻ โหลดรายงานจาก Supabase</button>${glurProfitError?`<div class="hint warn">${esc(glurProfitError)}</div>`:''}${glurProfitBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':''}</div>
+ shell('วิเคราะห์กำไร',`<div class="card"><div class="field"><label>เลือกเดือน (ตามวันทำการ 03:00–02:59 เวลาไทย)</label><input id="profitMonth" type="month" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:9px" id="profitReload">↻ โหลดรายงาน</button>${glurProfitError?`<div class="hint warn">${esc(glurProfitError)}</div>`:''}${glurProfitBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':''}</div>
  ${d?`<div class="grid">${metric('ยอดขาย',glurMoneySafe(s.revenue))}${metric('ต้นทุนขาย',glurMoneySafe(s.cogs))}${metric('กำไรขั้นต้น',glurMoneySafe(Number(s.revenue)-Number(s.cogs)))}${metric('จำนวนแก้ว',String(s.qty||0))}</div>
  <div class="card">${metricLine('ค่าใช้จ่ายที่บันทึก',glurMoneySafe(s.expenses))}${metricLine('กำไรหลังหักค่าใช้จ่ายที่บันทึก',glurMoneySafe(Number(s.revenue)-Number(s.cogs)-Number(s.expenses)))}${metricLine('อัตรากำไรขั้นต้น',Number(s.revenue)>0?(((Number(s.revenue)-Number(s.cogs))/Number(s.revenue))*100).toFixed(1)+'%':'—')}</div>
  <div class="section-title">เมนูขายดี (ตามจำนวนแก้ว)</div><div class="card">${top.length?top.map(x=>metricLine(x.name,`${x.qty} แก้ว · ${glurMoneySafe(x.revenue)}`)).join(''):empty('ไม่มีรายการขาย')}</div>
@@ -2105,7 +2105,7 @@ function renderGlurClosingReport(){
  const totals=glurCRRows.reduce((a,x)=>{a.revenue+=glurCRNum(x.revenue);a.cogs+=glurCRNum(x.cogs);a.expenses+=glurCRNum(x.expenses);a.qty+=glurCRNum(x.drinks_sold);return a},{revenue:0,cogs:0,expenses:0,qty:0});
  const rows=glurCRRows.map(x=>{const d={revenue:x.revenue,cogs:x.cogs,expenses:x.expenses,qty:x.drinks_sold};const deltaRevenue=glurCRNum(d.revenue)-glurCRNum(x.revenue),deltaCost=glurCRNum(d.cogs)-glurCRNum(x.cogs),deltaExpense=glurCRNum(d.expenses)-glurCRNum(x.expenses),deltaQty=glurCRNum(d.qty)-glurCRNum(x.drinks_sold);const changed=false;
  return `<div class="card"><div class="row between"><strong>${esc(x.business_date)} · รอบที่ ${esc(x.session_no||1)}</strong><span class="pill">บันทึกปิดยอด</span></div><div class="small muted">ปิดเมื่อ ${esc(new Date(x.closed_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}))} · ผู้ปิด ${esc(x.closer_display_name||'ไม่บันทึกชื่อ ณ วันปิด')} · @${esc(x.closer_username||'ไม่ทราบไอดี')}</div><div class="tableline"><span>ยอดขาย ณ ปิดยอด</span><strong>${glurMoneySafe(x.revenue)}</strong></div><div class="tableline"><span>จำนวนแก้ว ณ ปิด</span><strong>${esc(x.drinks_sold)}</strong></div><div class="tableline"><span>กำไรหลังค่าใช้จ่าย ณ ปิด</span><strong>${glurMoneySafe(x.profit_after_expenses)}</strong></div>${x.note?`<div class="hint">${esc(x.note)}</div>`:''}</div>`}).join('');
- shell('รายงานปิดยอด · Closing Report',`<div class="hint">รายงาน Snapshot แยกตามรอบ (ตั้งแต่ติดตั้งระบบใหม่ใช้วันทำการ 03:00–02:59 และค่าใช้จ่ายตามเวลาบันทึกจริง) · ประวัติเดิมยังใช้รอบ 05:00 ตามที่เคยบันทึก</div><div class="card"><form id="glurCRForm" class="stack"><div class="formgrid"><div class="field"><label>จากวันที่</label><input type="date" name="from" value="${esc(from)}" required></div><div class="field"><label>ถึงวันที่</label><input type="date" name="to" max="${glurThaiBusinessToday()}" value="${esc(to)}" required></div></div><button class="btn full" type="submit" ${glurCRBusy?'disabled':''}>${glurCRBusy?'กำลังโหลด…':'↻ โหลดรายงาน'}</button></form>${glurCRError?`<div class="hint warn">${esc(glurCRError)}</div>`:''}</div>${glurCRLoaded?`<div class="grid">${metric('จำนวนรอบที่ปิด',String(glurCRRows.length))}${metric('ยอดขาย ณ ปิดยอด',glurMoneySafe(totals.revenue))}${metric('กำไรขั้นต้น ณ ปิดยอด',glurMoneySafe(totals.revenue-totals.cogs))}${metric('จำนวนแก้ว ณ ปิดยอด',String(totals.qty))}</div><button class="btn secondary full" id="glurCRCSV" ${!glurCRRows.length?'disabled':''}>↓ ส่งออก CSV</button>${`<div class="card"><strong>ส่งออกรายงาน</strong><div class="hint">Excel สะสมตามช่วงวันที่ · PNG รายวัน หรือสรุปย้อนหลังตามช่วงวันที่</div><button class="btn secondary full" id="glurFinExcel">Excel (.xlsx)</button><label>วันที่สำหรับภาพ</label><select id="glurFinDay">${Array.from(new Set(glurCRRows.map(x=>x.business_date))).sort().reverse().map(day=>`<option value="${esc(day)}">${esc(day)} · ปิดยอดแล้ว</option>`).join("")}</select><button class="btn secondary full" id="glurFinImage">ภาพรายวัน (.png)</button><button class="btn secondary full" id="glurFinMonth">ภาพสรุปย้อนหลังตามช่วงวันที่ (.png)</button></div>`}<button class="btn secondary full" id="glurUsageOpen">📦 สรุปการใช้วัตถุดิบประจำเดือน</button><div class="section-title">รายละเอียดวันที่ปิดยอด</div>${rows||empty('ไม่มีวันที่ปิดยอดในช่วงนี้')}`:'<div class="hint">เลือกช่วงวันที่ แล้วกดโหลดรายงาน</div>'}<div class="hint">สรุปด้านบนรวมเฉพาะวันที่มีการปิดยอดแล้ว · ผู้ปิดแสดงเป็นรหัสบัญชีเพื่อไม่เดาชื่อจากข้อมูลที่ไม่ยืนยัน</div>`);
+ shell('รายงานปิดยอด',`<div class="hint">รายงาน Snapshot แยกตามรอบ (ตั้งแต่ติดตั้งระบบใหม่ใช้วันทำการ 03:00–02:59 และค่าใช้จ่ายตามเวลาบันทึกจริง) · ประวัติเดิมยังใช้รอบ 05:00 ตามที่เคยบันทึก</div><div class="card"><form id="glurCRForm" class="stack"><div class="formgrid"><div class="field"><label>จากวันที่</label><input type="date" name="from" value="${esc(from)}" required></div><div class="field"><label>ถึงวันที่</label><input type="date" name="to" max="${glurThaiBusinessToday()}" value="${esc(to)}" required></div></div><button class="btn full" type="submit" ${glurCRBusy?'disabled':''}>${glurCRBusy?'กำลังโหลด…':'↻ โหลดรายงาน'}</button></form>${glurCRError?`<div class="hint warn">${esc(glurCRError)}</div>`:''}</div>${glurCRLoaded?`<div class="grid">${metric('จำนวนรอบที่ปิด',String(glurCRRows.length))}${metric('ยอดขาย ณ ปิดยอด',glurMoneySafe(totals.revenue))}${metric('กำไรขั้นต้น ณ ปิดยอด',glurMoneySafe(totals.revenue-totals.cogs))}${metric('จำนวนแก้ว ณ ปิดยอด',String(totals.qty))}</div><button class="btn secondary full" id="glurCRCSV" ${!glurCRRows.length?'disabled':''}>↓ ส่งออก CSV</button>${`<div class="card"><strong>ส่งออกรายงาน</strong><div class="hint">Excel สะสมตามช่วงวันที่ · PNG รายวัน หรือสรุปย้อนหลังตามช่วงวันที่</div><button class="btn secondary full" id="glurFinExcel">Excel (.xlsx)</button><label>วันที่สำหรับภาพ</label><select id="glurFinDay">${Array.from(new Set(glurCRRows.map(x=>x.business_date))).sort().reverse().map(day=>`<option value="${esc(day)}">${esc(day)} · ปิดยอดแล้ว</option>`).join("")}</select><button class="btn secondary full" id="glurFinImage">ภาพรายวัน (.png)</button><button class="btn secondary full" id="glurFinMonth">ภาพสรุปย้อนหลังตามช่วงวันที่ (.png)</button></div>`}<button class="btn secondary full" id="glurUsageOpen">📦 สรุปการใช้วัตถุดิบประจำเดือน</button><div class="section-title">รายละเอียดวันที่ปิดยอด</div>${rows||empty('ไม่มีวันที่ปิดยอดในช่วงนี้')}`:'<div class="hint">เลือกช่วงวันที่ แล้วกดโหลดรายงาน</div>'}<div class="hint">สรุปด้านบนรวมเฉพาะวันที่มีการปิดยอดแล้ว · ผู้ปิดแสดงเป็นรหัสบัญชีเพื่อไม่เดาชื่อจากข้อมูลที่ไม่ยืนยัน</div>`);
  document.getElementById('glurCRForm').onsubmit=e=>{e.preventDefault();glurCRLoad(e.target.elements.from.value,e.target.elements.to.value)};
  const usageOpen=document.getElementById('glurUsageOpen');if(usageOpen)usageOpen.onclick=()=>setPage('monthly-usage');const b=document.getElementById('glurCRCSV');if(b)b.onclick=glurCRExport;for(const [id,kind] of [['glurFinExcel','xlsx'],['glurFinImage','png'],['glurFinMonth','png-month']]){const el=document.getElementById(id);if(el)el.onclick=async()=>{el.disabled=true;try{await glurTestFinanceExport(kind)}catch(e){toast('ส่งออกไม่สำเร็จ: '+(e.message||e))}finally{el.disabled=false}}}
 }
@@ -2197,7 +2197,7 @@ render=function(){
 let glurActivityRows=[],glurActivityError='',glurActivityBusy=false;
 function glurActivityDate(t){try{return new Date(t).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})}catch(e){return String(t||'')}}
 async function glurLoadActivity(){
- if(glurAdjustRole!=='owner')return;
+ if(!glurIsDeveloper())return;
  glurActivityBusy=true;glurActivityError='';
  const filter=document.getElementById('glurActivityFilter')?.value||'all';
  try{
@@ -2210,7 +2210,7 @@ async function glurLoadActivity(){
  finally{glurActivityBusy=false;if(page==='activity-audit')renderGlurActivity()}
 }
 function renderGlurActivity(){
- if(glurAdjustRole!=='owner'){shell('Employee Activity','<div class="hint">เฉพาะ Owner เท่านั้น</div>');return}
+ if(!glurIsDeveloper()){shell('Employee Activity','<div class="hint">เฉพาะนักพัฒนา เท่านั้น</div>');return}
  const choices=[['all','ทุกหมวด'],['glur_sales','ยอดขาย'],['glur_stock','สต๊อก'],['glur_stock_receipts','รับเข้า'],['glur_expenses','ค่าใช้จ่าย'],['glur_daily_closings','ปิดยอด'],['glur_recipes','สูตรเครื่องดื่ม'],['glur_prebatch_recipes','Pre-batch'],['glur_prebatch_batches','การผลิต Pre-batch'],['glur_employee_profiles','ชื่อพนักงาน'],['glur_members','สิทธิ์พนักงาน']];
  const previous=document.getElementById('glurActivityFilter')?.value||'all';
  const actionNames={INSERT:'เพิ่ม',UPDATE:'แก้ไข',DELETE:'ลบ'};
@@ -2223,7 +2223,7 @@ function renderGlurActivity(){
    <div class="small muted">รหัสรายการ: ${esc(x.entity_id||'—')} · ผู้ทำรายการ ID: ${esc(x.actor_user_id||'ไม่ทราบ')}</div>
    <details><summary class="small">ดูรายละเอียดก่อน/หลัง</summary><div class="small muted">ก่อน:</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">${safe(details.before)}</pre><div class="small muted">หลัง:</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">${safe(details.after)}</pre></details></div>`
  }).join('');
- shell('กิจกรรมพนักงาน · Audit',`<div class="hint">อ่านอย่างเดียว · เฉพาะ Owner · แสดง 300 รายการล่าสุด · เริ่มบันทึกตั้งแต่วันที่ติดตั้ง SQL (ไม่สร้างประวัติย้อนหลัง)</div>
+ shell('กิจกรรมพนักงาน',`<div class="hint">อ่านอย่างเดียว · เฉพาะนักพัฒนา · แสดง 300 รายการล่าสุด · เริ่มบันทึกตั้งแต่วันที่ติดตั้ง SQL (ไม่สร้างประวัติย้อนหลัง)</div>
  <div class="card"><div class="field"><label>หมวดรายการ</label><select id="glurActivityFilter">${choices.map(([v,t])=>`<option value="${v}" ${v===previous?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
  <button class="btn full" id="glurActivityRefresh" ${glurActivityBusy?'disabled':''}>${glurActivityBusy?'กำลังโหลด…':'↻ โหลดประวัติ'}</button>${glurActivityError?`<div class="hint warn">${esc(glurActivityError)}</div>`:''}</div>
  <div class="section-title">กิจกรรมล่าสุด (${glurActivityRows.length})</div>${rows||empty('ยังไม่มีกิจกรรมหลังติดตั้ง หรือไม่พบรายการในหมวดนี้')}
@@ -2234,14 +2234,14 @@ function renderGlurActivity(){
 const glurActivityOldRender=render;
 render=function(){if(!currentUser)return;if(page==='activity-audit'){renderGlurActivity();return}glurActivityOldRender()};
 const glurActivityOldSetPage=setPage;
-setPage=function(p){if(p==='activity-audit'&&glurAdjustRole!=='owner'){toast('เฉพาะ Owner เท่านั้น');return}glurActivityOldSetPage(p);if(p==='activity-audit')glurLoadActivity()};
+setPage=function(p){if(p==='activity-audit'&&!glurIsDeveloper()){toast('เฉพาะนักพัฒนา เท่านั้น');return}glurActivityOldSetPage(p);if(p==='activity-audit')glurLoadActivity()};
 const glurActivityOldAccess=glurLoadAdjustmentAccess;
-glurLoadAdjustmentAccess=async function(){await glurActivityOldAccess();document.querySelectorAll('#nav button[data-page="activity-audit"]').forEach(b=>b.classList.toggle('hidden',glurAdjustRole!=='owner'));if(page==='activity-audit'&&glurAdjustRole!=='owner')setPage('dashboard')};
+glurLoadAdjustmentAccess=async function(){await glurActivityOldAccess();document.querySelectorAll('#nav button[data-page="activity-audit"]').forEach(b=>b.classList.toggle('hidden',!glurIsDeveloper()));if(page==='activity-audit'&&!glurIsDeveloper())setPage('dashboard')};
 
 
 // GLUR BAR Stage 2: presentation guard; Supabase policies and RPC checks remain authoritative.
 function glurRoleAllowed(p){
- if(p==='backdated-sales')return glurIsDeveloper();
+ if(['backdated-sales','activity-audit','audit'].includes(p))return glurIsDeveloper();
  const role=glurAdjustRole;
  if(!role)return true;
  if(role==='staff')return ['dashboard','stock','recipes','sales','backdated-sales','receiving','closing'].includes(p);
@@ -2484,7 +2484,7 @@ function glurMonthlyExportExcel(){
 function renderReports(){
  if(!glurCanAdjust()){shell('รายงานรายเดือน','<div class="hint warn">เฉพาะ Owner / Manager เท่านั้น</div>');return}
  const m=glurMonthlySelected||glurThaiBusinessToday().slice(0,7);
- shell('สรุปรายงานประจำเดือน',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูลจาก Supabase</button></div><div class="card"><strong>Snapshot สต๊อกรายเดือน</strong><div class="small muted">บันทึกยอด ณ เวลากด (เดือนปฏิทินไทย) ไม่ใช่ยอดต้นเดือนหรือยอดปิดเดือน · เดือนละ 1 ครั้ง · ไม่เปลี่ยนสต๊อก</div><div class="small">${glurMonthlyData?.snapshot_at?'บันทึกแล้ว: '+esc(new Date(glurMonthlyData.snapshot_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})):'ยังไม่มี Snapshot ของเดือนนี้'}</div><button class="btn secondary full" id="monthlyCapture" style="margin-top:10px" ${m!==glurThaiCalendarMonth()||glurMonthlyBusy||glurMonthlyData?.snapshot_at?'disabled':''}>บันทึก Snapshot เดือนปัจจุบัน</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyMobile">📱 เปิดรายงานมือถือ · แบบกระชับ</button><button class="btn secondary full" style="margin-top:10px" id="monthlyExcel">ดาวน์โหลด Excel (.xlsx) · ตารางสำหรับคอมพิวเตอร์</button><button class="btn secondary full" style="margin-top:10px" id="monthlyCSV">ดาวน์โหลด CSV ตารางมาตรฐาน (สำหรับกรองข้อมูล)</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
+ shell('สรุปรายงานประจำเดือน',`<div class="card"><div class="field"><label>เลือกเดือน (วันบัญชีไทยเริ่ม 03:00 น.)</label><input type="month" id="reportMonth" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:10px" id="monthlyRefresh">↻ โหลดข้อมูล</button></div><div class="card"><strong>Snapshot สต๊อกรายเดือน</strong><div class="small muted">บันทึกยอด ณ เวลากด (เดือนปฏิทินไทย) ไม่ใช่ยอดต้นเดือนหรือยอดปิดเดือน · เดือนละ 1 ครั้ง · ไม่เปลี่ยนสต๊อก</div><div class="small">${glurMonthlyData?.snapshot_at?'บันทึกแล้ว: '+esc(new Date(glurMonthlyData.snapshot_at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})):'ยังไม่มี Snapshot ของเดือนนี้'}</div><button class="btn secondary full" id="monthlyCapture" style="margin-top:10px" ${m!==glurThaiCalendarMonth()||glurMonthlyBusy||glurMonthlyData?.snapshot_at?'disabled':''}>บันทึก Snapshot เดือนปัจจุบัน</button></div><div id="monthlyBody">${glurMonthlyBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':glurMonthlyError?`<div class="hint warn">${esc(glurMonthlyError)}</div>`:glurMonthlyData?glurMonthlyTables(glurMonthlyData):'<div class="hint">เลือกเดือนแล้วกดโหลดรายงาน</div>'}</div>${glurMonthlyData?'<div class="card"><button class="btn full" id="monthlyMobile">📱 เปิดรายงานมือถือ · แบบกระชับ</button><button class="btn secondary full" style="margin-top:10px" id="monthlyExcel">ดาวน์โหลด Excel (.xlsx) · ตารางสำหรับคอมพิวเตอร์</button><button class="btn secondary full" style="margin-top:10px" id="monthlyCSV">ดาวน์โหลด CSV ตารางมาตรฐาน (สำหรับกรองข้อมูล)</button></div>':''}<div class="hint">ยอดใช้วัตถุดิบอ้างอิง glur_sale_ingredients ณ เวลาขาย · ไม่รวม Prebatch ในหมวดนี้ · กำไรหลังหักเฉพาะค่าใช้จ่ายที่บันทึก · การปิดยอดหลายรอบไม่ทำให้ยอดขายถูกนับซ้ำ</div>`);
  document.getElementById('monthlyCapture').onclick=async()=>{
   if(glurMonthlyBusy||m!==glurThaiCalendarMonth()||glurMonthlyData?.snapshot_at)return;
   if(!confirm('ยืนยันบันทึกยอดสต๊อก ณ เวลานี้? ไม่ใช่ยอดต้นเดือนหรือยอดปิดเดือน และบันทึกได้ครั้งเดียว'))return;
@@ -2635,7 +2635,7 @@ body:not(.glur-test-mode) #glurModeLabel{background:#fff!important;color:#1c2921
  const rules={'backdated-sales':['system_developer'],stock:['stock_view','stock_create','stock_edit','stock_delete','stock_waste'],recipes:['recipes_view','recipes_create','recipes_edit','recipes_delete'],sales:['sales_create','sales_edit','sales_cancel'],receiving:['receiving_manage'],costs:['expenses_manage'],reports:['reports_view'],profit:['costs_view'],closing:['closing_manage'],'closing-report':['reports_view'],team:['employees_edit','employees_permissions'],audit:['audit_view'],'activity-audit':['audit_view']};
  let ready=false;
  const has=k=>glurAdjustRole==='owner'||(ready&&glurMyPermissions?.[k]===true);
- const can=p=>p==='backdated-sales'?glurIsDeveloper():!rules[p]||(!ready&&glurAdjustRole!=='owner')||rules[p].some(has);
+ const can=p=>['backdated-sales','activity-audit','audit'].includes(p)?glurIsDeveloper():!rules[p]||(!ready&&glurAdjustRole!=='owner')||rules[p].some(has);
  const hide=(el,yes)=>{if(el){el.classList.toggle('hidden',yes);if(yes)el.style.setProperty('display','none','important');else el.style.removeProperty('display')}};
  function apply(){
   if(!currentUser)return;
@@ -2779,8 +2779,24 @@ function renderGlurBackdatedSales(){
 .backdated-ui{max-width:680px;margin:0 auto}.backdated-lead{color:var(--muted);font-size:12px;margin:0 0 12px}.backdated-entry{padding:15px}.backdated-pair{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(80px,.7fr);gap:10px}.backdated-ui .stack{gap:12px}.backdated-ui label{font-size:12px;color:#d6c6ba}.backdated-ui input,.backdated-ui select,.backdated-ui textarea{width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-size:16px;padding:10px 11px;min-height:44px}.backdated-ui input[type=date]{display:block;appearance:none;-webkit-appearance:none;min-inline-size:0}.backdated-ui input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}.backdated-ui textarea{resize:vertical;min-height:70px;line-height:1.4}.backdated-ui #glurBackdatedSearch{font-size:14px;min-height:40px;padding:8px 11px}.backdated-summary{padding:12px;background:#241c17;border:1px solid #62432f;border-radius:10px;font-size:13px}.backdated-total{display:flex;align-items:center;justify-content:space-between;gap:10px}.backdated-total strong{color:var(--gold2);font-size:23px}.backdated-summary details{margin-top:6px}.backdated-summary summary{color:#c8b4a5;font-size:11px;cursor:pointer}.backdated-summary p{font-size:12px;margin:6px 0 0}.backdated-footnote{font-size:11px;color:var(--muted);text-align:center}.backdated-help{font-size:12px;color:var(--muted);margin:0 3px 15px}.backdated-help summary{cursor:pointer;padding:6px 0}.backdated-help p{margin:5px 0;line-height:1.6}.backdated-history{padding:13px 15px}.backdated-history>summary{cursor:pointer;font-size:14px;font-weight:650}.backdated-history .pill{margin-left:7px}.backdated-history-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}.backdated-history .item{align-items:flex-start}.backdated-history .item>strong{white-space:nowrap}
 @media(max-width:649px){body.glur-backdated-screen .top{height:48px!important;min-height:48px!important;padding:8px 13px!important;display:flex;flex-direction:row;align-items:center;justify-content:space-between}body.glur-backdated-screen .brand{font-size:20px;letter-spacing:2px}body.glur-backdated-screen .sub{display:none}body.glur-backdated-screen .glur-account{min-height:39px;padding:5px 12px;font-size:11px}body.glur-backdated-screen .glur-account .btn{padding:5px 9px;min-height:30px;font-size:11px}body.glur-backdated-screen #glurModeBar{min-height:40px!important;padding:5px 12px!important;border-width:1px!important}body.glur-backdated-screen #glurModeLabel{min-height:27px!important;padding:3px 7px!important;font-size:11px!important}body.glur-backdated-screen #glurModeToggle{font-size:11px!important;padding:5px 8px!important}body.glur-backdated-screen .wrap{padding-top:14px!important}body.glur-backdated-screen .page-title{font-size:21px;margin-bottom:4px}body.glur-backdated-screen .nav button[data-page="backdated-sales"]{min-width:84px}body.glur-backdated-screen .nav button{min-height:48px;padding:6px 5px}.backdated-entry{padding:13px}.backdated-ui .btn.full{min-height:45px;font-size:14px}.backdated-ui #glurBackdatedSearch{font-size:16px}}
 </style>
+<style id="glur-mobile-forms-v2">
+/* Keep native iOS date controls inside their field and prevent focus zoom. */
+input[type="date"],input[type="month"],input[type="datetime-local"]{display:block;appearance:none;-webkit-appearance:none;min-inline-size:0!important;width:100%!important;max-width:100%!important;box-sizing:border-box;text-align:left}
+input::-webkit-date-and-time-value{min-width:0;text-align:left}input::-webkit-datetime-edit{min-width:0;padding:0}
+form .field,form .formgrid{min-width:0}form textarea{box-sizing:border-box;width:100%;max-width:100%;resize:vertical}form .btn{margin-top:4px}
+body[data-glur-page="team"] .item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start}body[data-glur-page="team"] .item>div:first-child{grid-column:1/-1}body[data-glur-page="team"] .item>.actions{grid-column:1/-1;display:flex;flex-wrap:wrap}body[data-glur-page="team"] .item .small{overflow-wrap:anywhere}body[data-glur-page="team"] .item select{min-height:42px}
+@media(max-width:649px){
+.top{height:48px!important;min-height:48px!important;padding:8px 13px!important;display:flex;align-items:center;justify-content:space-between;flex-direction:row}.brand{font-size:20px!important;letter-spacing:2px}.top .sub{display:none}
+.glur-account{min-height:39px!important;padding:5px 12px!important;font-size:11px}.glur-account .btn{min-height:30px!important;font-size:11px;padding:5px 9px!important}
+#glurModeBar{min-height:40px!important;padding:5px 12px!important;border-width:1px!important;grid-template-columns:minmax(0,1fr) auto!important}#glurModeLabel{min-height:27px!important;font-size:11px!important;padding:3px 7px!important}#glurModeToggle{font-size:11px!important;padding:5px 8px!important}
+.wrap{padding:14px 12px calc(92px + env(safe-area-inset-bottom))!important}.page-title{font-size:21px!important;line-height:1.35;margin-bottom:12px!important;overflow-wrap:anywhere}.card{padding:13px!important;border-radius:13px!important;margin-bottom:12px}
+input,select,textarea{font-size:16px!important;min-height:44px;padding:10px 11px!important;border-radius:9px!important}textarea{min-height:72px}.field{gap:6px}.field label{font-size:12px;line-height:1.4}.stack{gap:12px}.hint{font-size:12px;line-height:1.55;padding:9px 11px}.btn{min-height:42px;padding:9px 12px;font-size:13px}.section-title{font-size:15px;margin:17px 0 10px}.metric{font-size:23px!important;margin-top:6px}.grid{gap:9px}.grid>.card{margin-bottom:0;min-height:90px}.closing-ui .card{padding:13px!important}.closing-ui .closing-head{flex-wrap:wrap}.closing-ui .closing-head strong{font-size:16px}.closing-ui .closing-intro{font-size:12px}.nav button{min-height:48px!important;padding:6px 5px!important}.nav button span{font-size:17px!important}.nav button[data-page="activity-audit"]{min-width:95px}
+#glurTeamCreate{gap:12px}#glurTeamCreate .btn{margin-top:3px}body[data-glur-page="activity-audit"] .card>.row>strong{font-size:13px;overflow-wrap:anywhere}body[data-glur-page="activity-audit"] .small{font-size:12px;line-height:1.6}#glurActivityRefresh{margin-top:12px}
+}
+</style>
 </body>
 </html>
+
 
 
 
