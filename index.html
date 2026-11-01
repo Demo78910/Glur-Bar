@@ -2073,7 +2073,7 @@ async function glurTestFinanceExport(kind){
   latestStock.forEach((x,i)=>{const cat=glurFinStockCategory(x.stock_name);if(cat!==previous){if(previous)y+=rowH;previous=cat;ctx.fillStyle='#ff913d';ctx.font='bold 24px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowH}
    if(i%2===0){ctx.fillStyle='#242424';ctx.fillRect(42,y-28,996,rowH)}
    ctx.fillStyle='#fff';ctx.font='21px sans-serif';ctx.fillText((i+1)+'. '+x.stock_name,55,y,730);ctx.textAlign='right';ctx.fillText(Number(x.quantity).toLocaleString('th-TH')+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowH});
-  ctx.fillStyle='#aaa';ctx.font='19px sans-serif';ctx.fillText('TEST: ข้อมูลสต๊อกบางส่วนจำลองจาก Snapshot ก่อนหน้า ไม่ใช่การตรวจนับจริง',50,height-45);
+  ctx.fillStyle='#aaa';ctx.font='19px sans-serif';ctx.fillText('ข้อมูลสต๊อกจาก Snapshot ที่บันทึกไว้ · โหมด '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,height-45);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพรายเดือนไม่สำเร็จ');
   const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_30Day_'+from+'_'+to+'.png';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);return;
  }
@@ -2106,7 +2106,7 @@ async function glurTestFinanceExport(kind){
  y+=58;let currentCategory='';for(let i=0;i<sortedItems.length;i++){const x=sortedItems[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){if(currentCategory)y+=rowHeight;currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
  ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,740);
  ctx.textAlign='right';ctx.fillText(Number(x.quantity).toLocaleString('th-TH')+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
- ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ข้อมูลสต๊อกเป็น Snapshot ณ เวลาปิดยอด · โหมด TEST',50,canvas.height-40);
+ ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ข้อมูลสต๊อกเป็น Snapshot ณ เวลาปิดยอด · โหมด '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพไม่สำเร็จ');
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_Daily_'+day+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
@@ -2121,7 +2121,7 @@ function renderGlurClosingReport(){
  document.getElementById('glurCRForm').onsubmit=e=>{e.preventDefault();glurCRLoad(e.target.elements.from.value,e.target.elements.to.value)};
  const usageOpen=document.getElementById('glurUsageOpen');if(usageOpen)usageOpen.onclick=()=>setPage('monthly-usage');const b=document.getElementById('glurCRCSV');if(b)b.onclick=glurCRExport;for(const [id,kind] of [['glurFinExcel','xlsx'],['glurFinImage','png'],['glurFinMonth','png-month']]){const el=document.getElementById(id);if(el)el.onclick=async()=>{el.disabled=true;try{await glurTestFinanceExport(kind)}catch(e){toast('ส่งออกไม่สำเร็จ: '+(e.message||e))}finally{el.disabled=false}}}
 }
-// TEST-only monthly ingredient consumption: transaction evidence is kept separate from snapshot estimates.
+// Shared LIVE/TEST monthly ingredient consumption: transaction evidence is kept separate from snapshot estimates.
 let glurUsageMonth='2026-10',glurUsageData=null,glurUsageBusy=false,glurUsageError='';
 async function glurUsageLoad(month){
  if(!glurCanAdjust())throw Error('ไม่มีสิทธิ์ดูรายงาน');
@@ -2830,6 +2830,7 @@ function glurClosingRevisionLabel(x){return x.cost_revised_at?`<details class="h
 </script>
 </body>
 </html>
+
 
 
 
