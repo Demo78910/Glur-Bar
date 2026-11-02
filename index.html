@@ -2335,7 +2335,35 @@ async function glurTestFinanceExport(kind){
  const sortedItems=items.slice().sort((a,b)=>glurFinStockCategory(a.stock_name).localeCompare(glurFinStockCategory(b.stock_name),'th')||a.stock_name.localeCompare(b.stock_name,'th'));
  const flowById=new Map(flows.map(x=>[String(x.id),x]));
  const historicalSnapshot=dayClosings.some(c=>Date.parse(c.closed_at)>Date.parse(glurCRShift(day,1)+'T03:00:00+07:00'));
- const stockDailyRows=sortedItems.map(x=>{const flow=flowById.get(String(x.stock_id));const ending=historicalSnapshot||x.quantity===null?null:Number(x.quantity);const used=flow?.used||0,added=flow?.added||0;return {...x,opening:ending===null?null:ending+used-added,used,added,ending};});
+ const allHistorical=async make=>{const result=[];for(let offset=0;;offset+=1000){const r=await make().range(offset,offset+999);if(r.error)throw r.error;result.push(...(r.data||[]));if((r.data||[]).length<1000)return result;}};
+ const reportShop=GLUR_SHOP_ID;
+ const [currentStock,allReceipts,allBatches,allRecipes,allMovements,allSales]=await Promise.all([
+  allHistorical(()=>glurSupabase.from('glur_stock').select('id,quantity').eq('shop_id',reportShop).order('id')),
+  allHistorical(()=>glurSupabase.from('glur_stock_receipts').select('id,stock_id,quantity,received_at').eq('shop_id',reportShop).order('id')),
+  allHistorical(()=>glurSupabase.from('glur_prebatch_batches').select('id,recipe_id,produced_qty,produced_at').eq('shop_id',reportShop).order('id')),
+  allHistorical(()=>glurSupabase.from('glur_prebatch_recipes').select('id,output_stock_id').eq('shop_id',reportShop).order('id')),
+  allHistorical(()=>glurSupabase.from('glur_stock_movements').select('id,stock_id,quantity_change,movement_type,reference_id,created_at').eq('shop_id',reportShop).order('id')),
+  allHistorical(()=>glurSupabase.from('glur_sales').select('id,sold_at,is_backdated,backdated_business_date').eq('shop_id',reportShop).order('id'))
+ ]);
+ if(GLUR_SHOP_ID!==reportShop)throw Error('โหมดเปลี่ยนระหว่างโหลดรายงาน');
+ const allSaleIds=new Set(allSales.map(x=>x.id)),allReceiptIds=new Set(allReceipts.map(x=>x.id)),allBatchIds=new Set(allBatches.map(x=>x.id));
+ const allSaleLines=await allHistorical(()=>glurSupabase.from('glur_sale_ingredients').select('id,sale_id,stock_id,quantity_used').in('sale_id',allSales.map(x=>x.id).length?allSales.map(x=>x.id):['00000000-0000-0000-0000-000000000000']).order('id'));
+ const allBatchInputs=await allHistorical(()=>glurSupabase.from('glur_prebatch_batch_inputs').select('batch_id,stock_id,quantity_used').in('batch_id',allBatches.map(x=>x.id).length?allBatches.map(x=>x.id):['00000000-0000-0000-0000-000000000000']).order('batch_id'));
+ const todayEnd=Date.parse(glurCRShift(day,1)+'T00:00:00+07:00');
+ const businessDayOf=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t));
+ const afterDay=t=>Date.parse(t)>=todayEnd;
+ const afterBusinessDay=t=>t>day;
+ const futureDelta=new Map();const addFuture=(id,qty)=>{if(!id||!Number.isFinite(Number(qty)))return;futureDelta.set(id,(futureDelta.get(id)||0)+Number(qty))};
+ for(const x of allReceipts)if(afterDay(x.received_at))addFuture(x.stock_id,Number(x.quantity));
+ const recipeOutputs=new Map(allRecipes.map(x=>[x.id,x.output_stock_id]));
+ const futureBatchIds=new Set();
+ for(const x of allBatches)if(afterDay(x.produced_at)){futureBatchIds.add(x.id);addFuture(recipeOutputs.get(x.recipe_id),Number(x.produced_qty))}
+ for(const x of allBatchInputs)if(futureBatchIds.has(x.batch_id))addFuture(x.stock_id,-Number(x.quantity_used));
+ const futureSaleIds=new Set(allSales.filter(x=>afterBusinessDay(x.is_backdated&&x.backdated_business_date?x.backdated_business_date:businessDayOf(x.sold_at))).map(x=>x.id));
+ for(const x of allSaleLines)if(futureSaleIds.has(x.sale_id))addFuture(x.stock_id,-Number(x.quantity_used));
+ for(const x of allMovements)if(!['sale','receive','receipt','batch','prebatch'].includes(String(x.movement_type||'').toLowerCase())&&!allSaleIds.has(x.reference_id)&&!allReceiptIds.has(x.reference_id)&&!allBatchIds.has(x.reference_id)&&afterDay(x.created_at))addFuture(x.stock_id,Number(x.quantity_change));
+ const currentById=new Map(currentStock.map(x=>[String(x.id),Number(x.quantity)]));
+ const stockDailyRows=sortedItems.map(x=>{const flow=flowById.get(String(x.stock_id));const used=flow?.used||0,added=flow?.added||0;const current=currentById.get(String(x.stock_id));const ending=Number.isFinite(current)?current-(futureDelta.get(x.stock_id)||0):null;return {...x,opening:ending===null?null:ending+used-added,used,added,ending};});
  const menuLines=Array.from(menus.entries()).sort((a,b)=>b[1].qty-a[1].qty);
  const canvas=document.createElement('canvas');canvas.width=1080;
  const rowHeight=46,menuTop=475,flowTop=menuTop+85+Math.max(1,menuLines.length)*rowHeight,stockTop=flowTop+flowHeight;const categories=Array.from(new Set(sortedItems.map(x=>glurFinStockCategory(x.stock_name))));
