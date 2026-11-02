@@ -885,7 +885,7 @@ glurSupabase.auth.onAuthStateChange((event,session)=>{
 let stockMainFilter='all',stockSubFilter='all',stockSearch='',stockDetailId=null,stockEditing=false;
 let recipeSearch='',recipeDetailId=null;
 const glurCategories=[
- {id:'liquor',label:'เหล้า · Liquor',subs:[['gin','Gin'],['vodka','Vodka'],['rum','Rum'],['whisky','Whisky'],['tequila','Tequila'],['brandy','Brandy'],['liqueur','Liqueur'],['vermouth','Vermouth'],['bitters','Bitters'],['thai_spirits','Thai Spirits'],['infused_batch','Batch / เหล้าที่เตรียมเอง'],['other','อื่น ๆ']]},
+ {id:'liquor',label:'เหล้า · Liquor',subs:[['gin','Gin'],['vodka','Vodka'],['rum','Rum'],['whisky','Whisky'],['tequila','Tequila'],['brandy','Brandy'],['wine','Wine / ไวน์'],['liqueur','Liqueur'],['vermouth','Vermouth'],['bitters','Bitters'],['thai_spirits','Thai Spirits'],['infused_batch','Batch / เหล้าที่เตรียมเอง'],['other','อื่น ๆ']]},
  {id:'mixer',label:'มิกเซอร์ · Mixer',subs:[['syrup','Syrup'],['juice','Juice'],['soda','Soda'],['tonic','Tonic'],['other','อื่น ๆ']]},
  {id:'fresh',label:'ของสด · Fresh',subs:[['fruit','ผลไม้'],['herb','สมุนไพร'],['garnish','Garnish'],['other','อื่น ๆ']]},
  {id:'other',label:'อื่น ๆ · Other',subs:[['seasoning','วัตถุดิบ'],['other','อื่น ๆ']]},
@@ -2059,7 +2059,9 @@ function glurCRExport(){
  const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='GLUR_Closing_Report_'+glurCRFrom+'_'+glurCRTo+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
+let glurFinCategoryMap=new Map();
 function glurFinStockCategory(name){
+ const saved=glurFinCategoryMap.get(String(name||'').trim().toLowerCase());if(saved)return saved;
  const n=String(name||'').replace(/^TEST DEMO\s*[·:]\s*/i,'').replace(/^TEST\s+/i,'').toLowerCase().trim();
  if(/ginger|mint|rosemary|pandan|lemongrass|kaffir|herb|ใบเตย|ตะไคร้|ขิง|สะระแหน่/.test(n))return 'สมุนไพร';
  if(/cucumber|passion fruit pulp|orange(?! juice)|lemon(?! juice)|lime(?! juice)|แตงกวา|เสาวรส|ส้ม|มะนาว|เลมอน/.test(n))return 'ผลไม้ / ผักสด';
@@ -2079,6 +2081,39 @@ function glurFinBestSnapshot(cs,stock){
  for(const c of cs){const count=stock.filter(x=>x.closing_id===c.id).length;if(count)groups.set(c.id,{closing:c,count})}
  const ordered=Array.from(groups.values()).sort((a,b)=>b.count-a.count||b.closing.business_date.localeCompare(a.closing.business_date)||Number(b.closing.session_no)-Number(a.closing.session_no));
  return ordered[0]||null;
+}
+
+function glurFinNameKey(name){return String(name||'').trim().replace(/\s+/g,' ').toLowerCase()}
+async function glurFinReadAll(make){const rows=[];for(let offset=0;;offset+=1000){const r=await make().range(offset,offset+999);if(r.error)throw r.error;rows.push(...(r.data||[]));if((r.data||[]).length<1000)return rows;}}
+async function glurFinLoadCatalog(){
+ const shop=GLUR_SHOP_ID;
+ const [stocks,recipeExtras,batchExtras,costExtras]=await Promise.all([
+  glurFinReadAll(()=>glurSupabase.from('glur_stock').select('id,name,unit,category,subcategory,is_active').eq('shop_id',shop).order('id')),
+  glurFinReadAll(()=>glurSupabase.from('glur_recipe_nonstock_ingredients').select('id,name,unit').eq('shop_id',shop).order('id')),
+  glurFinReadAll(()=>glurSupabase.from('glur_prebatch_nonstock_ingredients').select('id,name,unit').eq('shop_id',shop).order('id')),
+  glurFinReadAll(()=>glurSupabase.from('glur_cost_catalog').select('id,name,unit').eq('shop_id',shop).order('id'))
+ ]);
+ if(shop!==GLUR_SHOP_ID)throw Error('โหมดเปลี่ยน กรุณาโหลดรายงานใหม่');
+ glurFinCategoryMap=new Map(stocks.map(x=>[String(x.name).trim().toLowerCase(),stockCategoryLabel(inferStockCategory(x))]));
+ const extras=new Map();for(const x of [...recipeExtras,...batchExtras,...costExtras]){const name=glurFinNameKey(x.name);if(!name)continue;const key=name+'|'+String(x.unit||'').trim();if(!extras.has(key))extras.set(key,{name:x.name,unit:x.unit||'ไม่ระบุ',quantity:null})}
+ return {stocks,nonstock:Array.from(extras.values()).sort((a,b)=>a.name.localeCompare(b.name,'th')||a.unit.localeCompare(b.unit,'th'))};
+}
+function glurFinCompleteSnapshot(snapshot,catalog,closingId){
+ const rows=snapshot.map(x=>({...x})),seen=new Set(rows.map(x=>x.stock_id).filter(Boolean)),names=new Set(rows.map(x=>glurFinNameKey(x.stock_name)));
+ const byId=new Map(catalog.stocks.map(x=>[x.id,x]));
+ for(const row of rows){const current=byId.get(row.stock_id);if(current)glurFinCategoryMap.set(String(row.stock_name).trim().toLowerCase(),stockCategoryLabel(inferStockCategory(current)))}
+ for(const x of catalog.stocks){if(seen.has(x.id)||(!snapshot.some(r=>r.stock_id)&&names.has(glurFinNameKey(x.name))))continue;rows.push({closing_id:closingId,stock_id:x.id,stock_name:x.name,unit:x.unit,quantity:null,cost_per_unit:null,missing_snapshot:true})}
+ return rows;
+}
+function glurFinQuantityLabel(x){return x.quantity===null?'ไม่มี Snapshot':Number(x.quantity).toLocaleString('th-TH')+' '+x.unit}
+function glurFinCatalogHTML(catalog){
+ const groups=new Map();for(const x of catalog.stocks){const key=glurFinStockCategory(x.name);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(x)}
+ return '<details class="card"><summary>วัตถุดิบทั้งหมดในระบบ · ตัดสต๊อก '+catalog.stocks.length+' · ไม่ตัดสต๊อก '+catalog.nonstock.length+' รายการ</summary><div class="hint">รวมรายการซ่อน/ปิดใช้งาน · รายการนี้ใช้ตรวจความครบของรายชื่อ ไม่ใช่ยอดคงเหลือย้อนหลัง</div>'+Array.from(groups).sort((a,b)=>a[0].localeCompare(b[0],'th')).map(([cat,list])=>'<h4>'+esc(cat)+' ('+list.length+')</h4>'+list.map(x=>'<div class="tableline"><span>'+esc(x.name)+(x.is_active===false?' · ปิดใช้งาน':'')+'</span><span>'+esc(x.unit)+'</span></div>').join('')).join('')+'<h4>ส่วนผสมไม่ตัดสต๊อก ('+catalog.nonstock.length+')</h4>'+catalog.nonstock.map(x=>'<div class="tableline"><span>'+esc(x.name)+'</span><span>'+esc(x.unit)+' · ไม่ติดตามคงเหลือ</span></div>').join('')+'</details>';
+}
+function glurFinDrawNonstock(ctx,rows,y,rowH){
+ y+=55;ctx.fillStyle='#ff913d';ctx.font='bold 29px sans-serif';ctx.fillText('ส่วนผสมไม่ตัดสต๊อกทั้งหมด ('+rows.length+' รายการ)',50,y);y+=42;
+ ctx.fillStyle='#bbb';ctx.font='20px sans-serif';ctx.fillText('แสดงรายชื่อครบจากระบบ · ไม่มียอดคงเหลือให้ติดตาม',55,y);y+=48;
+ for(const x of rows){ctx.fillStyle='#fff';ctx.font='22px sans-serif';ctx.fillText(x.name,55,y,700);ctx.textAlign='right';ctx.fillStyle='#bbb';ctx.fillText(x.unit+' · ไม่ตัดสต๊อก',1020,y);ctx.textAlign='left';y+=rowH}return y;
 }
 
 // Read-only daily stock flows: sale date for sales, actual event time for other stock changes.
@@ -2114,8 +2149,8 @@ async function glurFinShowDailyFlows(){
  box.textContent='กำลังโหลดการใช้และรับเข้าของวันที่ '+day+'…';
  try{const result=await glurSupabase.from('glur_sales').select('id,sold_at').eq('shop_id',shop).gte('sold_at',day+'T03:00:00+07:00').lt('sold_at',glurCRShift(day,1)+'T03:00:00+07:00').limit(10000);if(result.error)throw result.error;
   const sales=(result.data||[]).filter(s=>cs.some(c=>c.period_start&&c.period_end?Date.parse(s.sold_at)>=Date.parse(c.period_start)&&Date.parse(s.sold_at)<Date.parse(c.period_end):true));
-  const rows=await glurFinDailyFlows(day,cs,sales);if(document.getElementById('glurFinFlows')!==box||GLUR_SHOP_ID!==shop||document.getElementById('glurFinDay')?.value!==day)return;
-  box.innerHTML='<div class="hint">วันที่ '+esc(day)+' · รับเข้า/ผลิตตามเวลาบันทึกจริง ถึงเวลาปิดยอด · ไม่ใช่ส่วนต่างจาก Snapshot</div>'+glurFinFlowHTML(rows);
+  const [rows,catalog]=await Promise.all([glurFinDailyFlows(day,cs,sales),glurFinLoadCatalog()]);if(document.getElementById('glurFinFlows')!==box||GLUR_SHOP_ID!==shop||document.getElementById('glurFinDay')?.value!==day)return;
+  box.innerHTML='<div class="hint">วันที่ '+esc(day)+' · รับเข้า/ผลิตตามเวลาบันทึกจริง ถึงเวลาปิดยอด · ไม่ใช่ส่วนต่างจาก Snapshot</div>'+glurFinFlowHTML(rows)+glurFinCatalogHTML(catalog);
  }catch(e){if(document.getElementById('glurFinFlows')===box)box.textContent='โหลดการเคลื่อนไหวไม่สำเร็จ: '+(e.message||e)}
 }
 
@@ -2124,12 +2159,13 @@ async function glurTestFinanceExport(kind){
  const from=glurCRFrom,to=glurCRTo,cs=glurCRRows.slice();
  if(!glurCRLoaded||!cs.length)throw Error('ไม่มีข้อมูลปิดยอดในช่วงวันที่เลือก กรุณาเลือกช่วงวันที่มีการปิดยอดและกดโหลดรายงาน');
  const ids=cs.map(c=>c.id);
- const [stockResult,saleResult]=await Promise.all([
- glurSupabase.from('glur_test_closing_stock_snapshots').select('closing_id,stock_name,unit,quantity,cost_per_unit').eq('shop_id',GLUR_SHOP_ID).in('closing_id',ids).limit(10000),
- glurSupabase.from('glur_sales').select('id,recipe_name,quantity_sold,total_amount,total_cost,sold_at').eq('shop_id',GLUR_SHOP_ID).gte('sold_at',from+'T00:00:00+07:00').lte('sold_at',glurCRShift(to,2)+'T00:00:00+07:00').order('sold_at').limit(10000)
+ const [stockResult,saleResult,catalog]=await Promise.all([
+ glurSupabase.from('glur_test_closing_stock_snapshots').select('closing_id,stock_id,stock_name,unit,quantity,cost_per_unit').eq('shop_id',GLUR_SHOP_ID).in('closing_id',ids).limit(10000),
+ glurSupabase.from('glur_sales').select('id,recipe_name,quantity_sold,total_amount,total_cost,sold_at').eq('shop_id',GLUR_SHOP_ID).gte('sold_at',from+'T00:00:00+07:00').lte('sold_at',glurCRShift(to,2)+'T00:00:00+07:00').order('sold_at').limit(10000),
+ glurFinLoadCatalog()
  ]);
  if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
- const stock=stockResult.data||[];
+ const stock=(stockResult.data||[]);for(const c of cs){const complete=glurFinCompleteSnapshot(stock.filter(x=>x.closing_id===c.id),catalog,c.id);for(const row of complete)if(row.missing_snapshot)stock.push(row)}
  const bangkokDay=(iso)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(iso));
  const sales=(saleResult.data||[]).map(s=>{
   const t=Date.parse(s.sold_at);
@@ -2198,15 +2234,16 @@ async function glurTestFinanceExport(kind){
   const menuRows=Array.from(menuTotals,([name,v])=>[name,v.qty,v.revenue,v.cost,v.revenue-v.cost]).sort((a,b)=>b[2]-a[2]);
   sheet('02 ยอดขายแยกเมนู',['ชื่อเมนู','จำนวนแก้ว','ยอดขาย (บาท)','ต้นทุน (บาท)','กำไรขั้นต้น (บาท)'],menuRows,[40,18,25,25,28],[3,4,5]);
   sheet('03 รายการขาย',['วันทำการ','ชื่อเมนู','จำนวนแก้ว','ยอดขาย (บาท)','ต้นทุน (บาท)'],sales.map(x=>[x.day,x.recipe_name,money(x.quantity_sold),money(x.total_amount),money(x.total_cost)]),[20,42,18,26,26],[4,5]);
-  const stockRows=stock.map(x=>{const c=cs.find(y=>y.id===x.closing_id);return[c?.business_date||'',c?.session_no||'',glurFinStockCategory(x.stock_name),x.stock_name,x.unit,money(x.quantity),money(x.cost_per_unit)]}).sort((a,b)=>a[0].localeCompare(b[0])||a[2].localeCompare(b[2],'th')||a[3].localeCompare(b[3],'th'));
+  const stockRows=stock.map(x=>{const c=cs.find(y=>y.id===x.closing_id);return[c?.business_date||'',c?.session_no||'',glurFinStockCategory(x.stock_name),x.stock_name,x.unit,x.quantity===null?'ไม่มี Snapshot':money(x.quantity),x.cost_per_unit===null?null:money(x.cost_per_unit)]}).sort((a,b)=>a[0].localeCompare(b[0])||a[2].localeCompare(b[2],'th')||a[3].localeCompare(b[3],'th'));
   groupedStockSheet('04 สต๊อกย้อนหลัง',['วันปิดยอด','รอบ','หมวดสินค้า','ชื่อสินค้า','หน่วย','คงเหลือ ณ ปิดยอด','ต้นทุนต่อหน่วย (บาท)'],stockRows,[20,12,27,48,14,28,30],[7],2,0);
   const best=glurFinBestSnapshot(cs,stock),last=best?.closing;
   const latest=stock.filter(x=>x.closing_id===last?.id).sort((a,b)=>glurFinStockCategory(a.stock_name).localeCompare(glurFinStockCategory(b.stock_name),'th')||a.stock_name.localeCompare(b.stock_name,'th'));
-  const latestWs=groupedStockSheet('05 สต๊อกล่าสุด',['หมวดสินค้า','ชื่อสินค้า','หน่วย','คงเหลือ ณ '+(last?.business_date||to),'ต้นทุนต่อหน่วย (บาท)'],latest.map(x=>[glurFinStockCategory(x.stock_name),x.stock_name,x.unit,money(x.quantity),money(x.cost_per_unit)]),[27,48,16,31,31],[5],0,null);
+  const latestWs=groupedStockSheet('05 สต๊อกล่าสุด',['หมวดสินค้า','ชื่อสินค้า','หน่วย','คงเหลือ ณ '+(last?.business_date||to),'ต้นทุนต่อหน่วย (บาท)'],latest.map(x=>[glurFinStockCategory(x.stock_name),x.stock_name,x.unit,x.quantity===null?'ไม่มี Snapshot':money(x.quantity),x.cost_per_unit===null?null:money(x.cost_per_unit)]),[27,48,16,31,31],[5],0,null);
   latestWs.getCell('A3').value='Snapshot ที่มีรายการครบที่สุด: '+(last?.business_date||'ไม่มีข้อมูล')+' ('+latest.length+' รายการ)';
   latestWs.getCell('A4').value='หมายเหตุ: วันที่ล่าสุดอาจมีรายการน้อยกว่า จึงเลือก Snapshot ที่ครบที่สุด';
   latestWs.getCell('A3').font={bold:true,color:{argb:'FFAD4E00'}};
   latestWs.getCell('A4').font={italic:true,color:{argb:'FFAD4E00'}};
+  sheet('06 ส่วนผสมไม่ตัดสต๊อก',['ชื่อวัตถุดิบ','หน่วย','การติดตาม'],catalog.nonstock.map(x=>[x.name,x.unit,'ไม่ตัดสต๊อก / ไม่ติดตามคงเหลือ']),[48,18,42]);
   const buffer=await wb.xlsx.writeBuffer();
   const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_Owner_Report_'+from+'_'+to+'.xlsx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
@@ -2223,7 +2260,7 @@ async function glurTestFinanceExport(kind){
   const cats=Array.from(new Set(latestStock.map(x=>glurFinStockCategory(x.stock_name))));
   const rowH=39,base=490,chartH=270;
   const menuStart=base+chartH+70,dayStart=menuStart+70+menuRows.length*rowH,stockStart=dayStart+70+dayRows.length*rowH;
-  const height=stockStart+95+(latestStock.length+cats.length*2)*rowH+110;
+  const height=stockStart+95+(latestStock.length+cats.length*2)*rowH+110+180+catalog.nonstock.length*rowH;
   const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=height;
   const ctx=canvas.getContext('2d');ctx.fillStyle='#171717';ctx.fillRect(0,0,1080,height);
   const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2245,7 +2282,8 @@ async function glurTestFinanceExport(kind){
   heading('สต๊อกวันสุดท้าย '+lastClosing.business_date+' ('+latestStock.length+' รายการ)',stockStart);y=stockStart+52;let previous='';
   latestStock.forEach((x,i)=>{const cat=glurFinStockCategory(x.stock_name);if(cat!==previous){if(previous)y+=rowH;previous=cat;ctx.fillStyle='#ff913d';ctx.font='bold 24px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowH}
    if(i%2===0){ctx.fillStyle='#242424';ctx.fillRect(42,y-28,996,rowH)}
-   ctx.fillStyle='#fff';ctx.font='21px sans-serif';ctx.fillText((i+1)+'. '+x.stock_name,55,y,730);ctx.textAlign='right';ctx.fillText(Number(x.quantity).toLocaleString('th-TH')+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowH});
+   ctx.fillStyle='#fff';ctx.font='21px sans-serif';ctx.fillText((i+1)+'. '+x.stock_name,55,y,730);ctx.textAlign='right';ctx.fillText(glurFinQuantityLabel(x),1020,y);ctx.textAlign='left';y+=rowH});
+  y=glurFinDrawNonstock(ctx,catalog.nonstock,y,rowH);
   ctx.fillStyle='#aaa';ctx.font='19px sans-serif';ctx.fillText('ข้อมูลสต๊อกจาก Snapshot ที่บันทึกไว้ · โหมด '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,height-45);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพรายเดือนไม่สำเร็จ');
   const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_30Day_'+from+'_'+to+'.png';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);return;
@@ -2263,7 +2301,7 @@ async function glurTestFinanceExport(kind){
  const menuLines=Array.from(menus.entries()).sort((a,b)=>b[1].qty-a[1].qty);
  const canvas=document.createElement('canvas');canvas.width=1080;
  const rowHeight=46,menuTop=475,flowTop=menuTop+85+Math.max(1,menuLines.length)*rowHeight,stockTop=flowTop+flowHeight;const categories=Array.from(new Set(sortedItems.map(x=>glurFinStockCategory(x.stock_name))));
- canvas.height=stockTop+110+(sortedItems.length+categories.length*2)*rowHeight+100;
+ canvas.height=stockTop+110+(sortedItems.length+categories.length*2)*rowHeight+100+180+catalog.nonstock.length*rowHeight;
  const ctx=canvas.getContext('2d');
  ctx.fillStyle='#171717';ctx.fillRect(0,0,canvas.width,canvas.height);
  ctx.fillStyle='#ff913d';ctx.font='bold 52px sans-serif';ctx.fillText('GLUR BAR · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,82);
@@ -2287,7 +2325,8 @@ async function glurTestFinanceExport(kind){
  y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อกคงเหลือทั้งหมด ('+sortedItems.length+' รายการ)',50,y);
  y+=58;let currentCategory='';for(let i=0;i<sortedItems.length;i++){const x=sortedItems[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){if(currentCategory)y+=rowHeight;currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
  ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,740);
- ctx.textAlign='right';ctx.fillText(Number(x.quantity).toLocaleString('th-TH')+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
+ ctx.textAlign='right';ctx.fillText(glurFinQuantityLabel(x),1020,y);ctx.textAlign='left';y+=rowHeight}
+ y=glurFinDrawNonstock(ctx,catalog.nonstock,y,rowHeight);
  ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('รับเข้า/ผลิตตามเวลาจริง · คงเหลือเป็น Snapshot ณ ปิดยอด · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพไม่สำเร็จ');
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_Daily_'+day+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
