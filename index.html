@@ -2152,7 +2152,7 @@ function glurFinDrawNonstock(ctx,rows,y,rowH){
 // Read-only daily stock flows: sale date for sales, actual event time for other stock changes.
 async function glurFinDailyFlows(day,dayClosings,daySales){
  const shop=GLUR_SHOP_ID,start=day+'T03:00:00+07:00',end=glurCRShift(day,1)+'T03:00:00+07:00';
- const cutoff=Math.max(...dayClosings.map(c=>Date.parse(c.closed_at)||0));
+ // Historical entries may be recorded after the original closing; business date controls reporting.
  const all=async make=>{let rows=[];for(let offset=0;;offset+=1000){const r=await make().range(offset,offset+999);if(r.error)throw r.error;rows.push(...(r.data||[]));if((r.data||[]).length<1000)return rows;}};
  const [stocks,receipts,batches,movements,recipes]=await Promise.all([
   all(()=>glurSupabase.from('glur_stock').select('id,name,unit').eq('shop_id',shop).order('id')),
@@ -2166,9 +2166,9 @@ async function glurFinDailyFlows(day,dayClosings,daySales){
  const rows=new Map(),covered=new Set(daySales.map(x=>x.id));
  const add=(id,change,reason)=>{const qty=Number(change);if(!Number.isFinite(qty)||!qty)return;const st=catalog.get(id);if(!st)throw Error('ไม่พบข้อมูลวัตถุดิบสำหรับประวัติ '+id);let r=rows.get(id);if(!r){r={id,name:st.name,unit:st.unit,used:0,added:0,reasons:new Set()};rows.set(id,r)}if(qty<0)r.used-=qty;else r.added+=qty;r.reasons.add(reason)};
  for(let i=0;i<daySales.length;i+=100){const ids=daySales.slice(i,i+100).map(x=>x.id);const lines=await all(()=>glurSupabase.from('glur_sale_ingredients').select('id,stock_id,quantity_used').in('sale_id',ids).order('id'));for(const x of lines)add(x.stock_id,-Number(x.quantity_used),'ขาย / เสิร์ฟฟรี')}
- for(const x of receipts){if(Date.parse(x.created_at)>cutoff)continue;covered.add(x.id);add(x.stock_id,x.quantity,'รับเข้า / เบิกเข้าบาร์')}
- for(const x of batches){if(Date.parse(x.produced_at)>cutoff)continue;covered.add(x.id);const recipe=recipeMap.get(x.recipe_id);if(!recipe)throw Error('ไม่พบสูตร Batch ในประวัติ');add(recipe.output_stock_id,x.produced_qty,'ผลผลิต Batch');const inputs=await all(()=>glurSupabase.from('glur_prebatch_batch_inputs').select('stock_id,quantity_used').eq('batch_id',x.id).order('stock_id'));for(const input of inputs)add(input.stock_id,-Number(input.quantity_used),'ใช้ผลิต Batch')}
- for(const x of movements){if(Date.parse(x.created_at)>cutoff||x.movement_type==='sale'||covered.has(x.reference_id))continue;add(x.stock_id,x.quantity_change,'ปรับ / ใช้ / ของเสีย')}
+ for(const x of receipts){covered.add(x.id);add(x.stock_id,x.quantity,'รับเข้า / เบิกเข้าบาร์')}
+ for(const x of batches){covered.add(x.id);const recipe=recipeMap.get(x.recipe_id);if(!recipe)throw Error('ไม่พบสูตร Batch ในประวัติ');add(recipe.output_stock_id,x.produced_qty,'ผลผลิต Batch');const inputs=await all(()=>glurSupabase.from('glur_prebatch_batch_inputs').select('stock_id,quantity_used').eq('batch_id',x.id).order('stock_id'));for(const input of inputs)add(input.stock_id,-Number(input.quantity_used),'ใช้ผลิต Batch')}
+ for(const x of movements){if(x.movement_type==='sale'||covered.has(x.reference_id))continue;add(x.stock_id,x.quantity_change,'ปรับ / ใช้ / ของเสีย')}
  return Array.from(rows.values()).map(r=>({...r,reasons:Array.from(r.reasons).join(' · ')})).sort((a,b)=>a.name.localeCompare(b.name,'th'));
 }
 function glurFinFlowHTML(rows){
@@ -2180,8 +2180,8 @@ async function glurFinShowDailyFlows(){
  const box=document.getElementById('glurFinFlows');if(!box)return;
  const day=document.getElementById('glurFinDay')?.value,cs=glurCRRows.filter(c=>c.business_date===day),shop=GLUR_SHOP_ID;
  box.textContent='กำลังโหลดการใช้และรับเข้าของวันที่ '+day+'…';
- try{const result=await glurSupabase.from('glur_sales').select('id,sold_at,nonstock_snapshot').eq('shop_id',shop).gte('sold_at',day+'T03:00:00+07:00').lt('sold_at',glurCRShift(day,1)+'T03:00:00+07:00').limit(10000);if(result.error)throw result.error;
-  const sales=(result.data||[]).filter(s=>cs.some(c=>c.period_start&&c.period_end?Date.parse(s.sold_at)>=Date.parse(c.period_start)&&Date.parse(s.sold_at)<Date.parse(c.period_end):true));
+ try{const result=await glurSupabase.from('glur_sales').select('id,sold_at,is_backdated,backdated_business_date,nonstock_snapshot').eq('shop_id',shop).or('backdated_business_date.eq.'+day+',and(sold_at.gte.'+encodeURIComponent(day+'T03:00:00+07:00')+',sold_at.lt.'+encodeURIComponent(glurCRShift(day,1)+'T03:00:00+07:00')+')').limit(10000);if(result.error)throw result.error;
+  const sales=(result.data||[]).filter(s=>s.is_backdated?s.backdated_business_date===day:cs.some(c=>c.period_start&&c.period_end?Date.parse(s.sold_at)>=Date.parse(c.period_start)&&Date.parse(s.sold_at)<Date.parse(c.period_end):true));
   const [rows,catalog]=await Promise.all([glurFinDailyFlows(day,cs,sales),glurFinLoadCatalog()]);if(document.getElementById('glurFinFlows')!==box||GLUR_SHOP_ID!==shop||document.getElementById('glurFinDay')?.value!==day)return;
   box.innerHTML='<div class="hint">วันที่ '+esc(day)+' · รับเข้า/ผลิตตามเวลาบันทึกจริง ถึงเวลาปิดยอด · ไม่ใช่ส่วนต่างจาก Snapshot</div>'+glurFinFlowHTML(rows)+glurFinUsedNonstockHTML(glurFinUsedNonstock(sales))+glurFinCatalogHTML({...catalog,nonstock:[]});
  }catch(e){if(document.getElementById('glurFinFlows')===box)box.textContent='โหลดการเคลื่อนไหวไม่สำเร็จ: '+(e.message||e)}
@@ -2194,7 +2194,7 @@ async function glurTestFinanceExport(kind){
  const ids=cs.map(c=>c.id);
  const [stockResult,saleResult,catalog]=await Promise.all([
  glurFinReadAll(()=>glurSupabase.from('glur_test_closing_stock_snapshots').select('closing_id,stock_id,stock_name,unit,quantity,cost_per_unit').eq('shop_id',GLUR_SHOP_ID).in('closing_id',ids).order('closing_id').order('stock_id')).then(data=>({data,error:null})),
- glurFinReadAll(()=>glurSupabase.from('glur_sales').select('id,recipe_name,quantity_sold,total_amount,total_cost,sold_at,nonstock_snapshot').eq('shop_id',GLUR_SHOP_ID).gte('sold_at',from+'T00:00:00+07:00').lte('sold_at',glurCRShift(to,2)+'T00:00:00+07:00').order('sold_at').order('id')).then(data=>({data,error:null})),
+ glurFinReadAll(()=>glurSupabase.from('glur_sales').select('id,recipe_name,quantity_sold,total_amount,total_cost,sold_at,is_backdated,backdated_business_date,nonstock_snapshot').eq('shop_id',GLUR_SHOP_ID).gte('sold_at',from+'T00:00:00+07:00').lte('sold_at',glurCRShift(to,2)+'T00:00:00+07:00').order('sold_at').order('id')).then(data=>({data,error:null})),
  glurFinLoadCatalog()
  ]);
  if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
@@ -2203,7 +2203,7 @@ async function glurTestFinanceExport(kind){
  const sales=(saleResult.data||[]).map(s=>{
   const t=Date.parse(s.sold_at);
   const date=bangkokDay(s.sold_at);
-  const c=cs.find(x=>x.period_start&&x.period_end&&t>=Date.parse(x.period_start)&&t<Date.parse(x.period_end))
+  const c=(s.is_backdated?cs.find(x=>x.business_date===s.backdated_business_date):null)||cs.find(x=>x.period_start&&x.period_end&&t>=Date.parse(x.period_start)&&t<Date.parse(x.period_end))
    ||cs.find(x=>!x.period_start&&!x.period_end&&x.business_date===date);
   return Object.assign({},s,{day:c?c.business_date:''});
  }).filter(x=>x.day);
