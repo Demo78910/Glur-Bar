@@ -3070,34 +3070,37 @@ function glurClosingRevisionLabel(x){return x.cost_revised_at?`<details class="h
 </script>
 
 
-<script id="glur-regency-requisition-v1">
+<script id="glur-regency-requisition-v2">
 (function(){
 const STOCK_NAME='Regency แบน 350 ml', ML=350, COST=345;
 let busy=false;
-function allowed(){return typeof currentUser!=='undefined'&&!!currentUser&&(typeof glurMyPermissions==='undefined'||glurAdjustRole==='owner'||glurMyPermissions.receiving!==false);}
+function allowed(){return typeof currentUser!=='undefined'&&!!currentUser&&(typeof glurAdjustRole!=='undefined'&&glurAdjustRole==='owner'||typeof glurMyPermissions!=='undefined'&&glurMyPermissions.receiving_manage===true);}
 function install(){
  if(typeof page==='undefined'||page!=='stock'||!allowed())return;
  const host=document.getElementById('app');if(!host||host.querySelector('#regencyReqCard'))return;
- const card=document.createElement('div');card.className='card';card.id='regencyReqCard';
- card.innerHTML='<div class="section-title" style="margin-top:0">Regency แบน 350 ml · เบิก</div><div class="small muted">หน้าบ้านนับแยก · รับเข้าสต๊อกบาร์เท่านั้น · ต้นทุนประมาณการ ฿345/แบน</div><form id="regencyReqForm" class="stack" style="margin-top:12px"><div class="field"><label>จำนวนแบนที่เบิก</label><input name="bottles" type="number" min="1" max="100" step="1" value="1" required></div><div id="regencyReqPreview" class="hint">1 แบน = 350 ml · ต้นทุนประมาณการ ฿345</div><div class="field"><label>หมายเหตุ (ถ้ามี)</label><input name="note" maxlength="200" placeholder="เช่น เบิกจากหน้าบ้านกะเย็น"></div><button type="submit" class="btn full">เบิก</button><div id="regencyReqMessage" class="small" role="status"></div></form>';
+ const card=document.createElement('details');card.className='card';card.id='regencyReqCard';
+ card.style.cssText='padding:0;overflow:hidden;margin-top:10px';
+ card.innerHTML='<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px"><span style="min-width:0"><strong>Regency แบน 350 ml</strong><span class="small muted" style="display:block">เบิกเข้าบาร์ · 350 ml/แบน</span></span><span class="pill">เบิก ▾</span></summary><form id="regencyReqForm" class="stack" style="padding:0 14px 14px;border-top:1px solid var(--line)"><div class="formgrid" style="margin-top:12px"><div class="field"><label>จำนวนแบน</label><input name="bottles" type="number" min="1" max="100" step="1" value="1" required></div><div class="field"><label>ประเภทรับเข้า</label><select name="kind"><option value="purchase">เบิกภายใน (มีต้นทุน)</option><option value="gift">Gift · รับฟรี</option></select></div></div><div class="field"><label>หมายเหตุ (ไม่บังคับ)</label><input name="note" maxlength="200" placeholder="เช่น เบิกจากหน้าบ้านกะเย็น"></div><div id="regencyReqPreview" class="small muted">1 แบน = 350 ml · ต้นทุน ฿345</div><div class="actions"><button type="button" class="btn secondary" id="regencyReqCancel">ยกเลิก</button><button type="submit" class="btn" style="flex:1">ยืนยันเบิก</button></div><div id="regencyReqMessage" class="small" role="status"></div></form>';
  const first=host.querySelector('.card');if(first)first.after(card);else host.prepend(card);
- const form=card.querySelector('form'),preview=card.querySelector('#regencyReqPreview'),message=card.querySelector('#regencyReqMessage'),btn=form.querySelector('button');
- form.elements.bottles.addEventListener('input',()=>{const n=Number(form.elements.bottles.value);preview.textContent=Number.isInteger(n)&&n>0?n+' แบน = '+(n*ML).toLocaleString('th-TH')+' ml · ต้นทุนประมาณการ ฿'+(n*COST).toLocaleString('th-TH'):'กรอกจำนวนแบนเต็มตั้งแต่ 1 ขึ้นไป'});
+ const form=card.querySelector('form'),preview=card.querySelector('#regencyReqPreview'),message=card.querySelector('#regencyReqMessage'),btn=form.querySelector('[type=submit]');
+ function refresh(){const n=Number(form.elements.bottles.value),gift=form.elements.kind.value==='gift';preview.textContent=Number.isInteger(n)&&n>0?n+' แบน = '+(n*ML).toLocaleString('th-TH')+' ml · '+(gift?'รับฟรี ฿0 · คงต้นทุนสูตรเดิม':'ต้นทุน ฿'+(n*COST).toLocaleString('th-TH')):'กรอกจำนวนเต็ม 1–100 แบน'}
+ form.elements.bottles.addEventListener('input',refresh);form.elements.kind.addEventListener('change',refresh);
+ card.querySelector('#regencyReqCancel').onclick=()=>{if(!busy){card.open=false;message.textContent=''}};
  form.addEventListener('submit',async e=>{
   e.preventDefault();if(busy)return;
-  const n=Number(form.elements.bottles.value);if(!Number.isInteger(n)||n<1||n>100){message.textContent='จำนวนต้องเป็นเลขเต็ม 1–100 แบน';return}
+  const n=Number(form.elements.bottles.value),gift=form.elements.kind.value==='gift';
+  if(!Number.isInteger(n)||n<1||n>100){message.textContent='จำนวนต้องเป็นเลขเต็ม 1–100 แบน';return}
   if(!allowed()){message.textContent='บัญชีนี้ไม่มีสิทธิ์รับสต๊อก';return}
-  const stock=cloudStock.find(x=>x.name===STOCK_NAME&&x.shop_id===GLUR_SHOP_ID);
+  const stock=cloudStock.find(x=>x.name===STOCK_NAME&&x.shop_id===GLUR_SHOP_ID&&x.is_active!==false);
   if(!stock){message.textContent='ไม่พบ Regency ในโหมดนี้ กรุณารีเฟรชสต๊อก';return}
   const mode=GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE';
-  if(!confirm('ยืนยันเบิก Regency '+n+' แบน ('+(n*ML)+' ml) จากหน้าบ้าน เข้า '+mode+'?\\nไม่ตัดสต๊อกหน้าบ้าน'))return;
+  if(!confirm('ยืนยัน'+(gift?'รับฟรี Gift':'เบิกมีต้นทุน')+' Regency '+n+' แบน ('+(n*ML)+' ml) เข้า '+mode+'?\\nไม่ตัดสต๊อกหน้าบ้าน'))return;
   busy=true;btn.disabled=true;message.textContent='กำลังบันทึก...';
   const requestKey=crypto.randomUUID();
   try{
-   const {error}=await glurSupabase.rpc('glur_receive_stock_v2',{p_shop_id:GLUR_SHOP_ID,p_stock_id:stock.id,p_quantity:n*ML,p_total_cost:n*COST,p_receipt_kind:'purchase',p_supplier:'หน้าบ้าน (เบิกภายใน)',p_note:'เบิก Regency '+n+' แบน จากหน้าบ้าน | '+form.elements.note.value.trim(),p_cost_policy:'average',p_request_key:requestKey});
+   const {error}=await glurSupabase.rpc('glur_receive_stock_v2',{p_shop_id:GLUR_SHOP_ID,p_stock_id:stock.id,p_quantity:n*ML,p_total_cost:gift?0:n*COST,p_receipt_kind:gift?'gift':'purchase',p_supplier:'หน้าบ้าน (เบิกภายใน)',p_note:'เบิก Regency '+n+' แบน จากหน้าบ้าน | '+form.elements.note.value.trim(),p_cost_policy:gift?'keep':'average',p_request_key:requestKey});
    if(error)throw error;
-   message.textContent='บันทึกเบิก '+n+' แบนสำเร็จ · '+mode;form.reset();preview.textContent='1 แบน = 350 ml · ต้นทุนประมาณการ ฿345';
-   await loadCloudStock();
+   form.reset();refresh();card.open=false;toast('บันทึก '+n+' แบนใน '+mode+' สำเร็จ');await loadCloudStock();
   }catch(err){message.textContent='เบิกไม่สำเร็จ: '+(err.message||err)}
   finally{busy=false;btn.disabled=false}
  });
