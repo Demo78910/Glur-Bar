@@ -2506,7 +2506,7 @@ async function glurLoadActivity(){
  try{
   let q=glurSupabase.from('glur_activity_audit')
    .select('id,happened_at,actor_user_id,actor_username,actor_display_name,actor_role,action,entity_table,entity_id,details')
-   .eq('shop_id',GLUR_SHOP_ID).order('happened_at',{ascending:false}).limit(300);
+   .eq('shop_id',GLUR_SHOP_ID).(GLUR_SHOP_ID==='e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af'?'gt':'gte')('happened_at',GLUR_SHOP_ID==='e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af'?'2026-11-02T22:24:29.239718Z':'1970-01-01T00:00:00Z').order('happened_at',{ascending:false}).limit(300);
   if(filter!=='all')q=q.eq('entity_table',filter);
   const {data,error}=await q;if(error)throw error;glurActivityRows=data||[];
  }catch(e){glurActivityRows=[];glurActivityError=e.message||String(e)}
