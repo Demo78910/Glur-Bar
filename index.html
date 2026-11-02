@@ -2151,7 +2151,7 @@ function glurFinDrawNonstock(ctx,rows,y,rowH){
 
 // Read-only daily stock flows: sale date for sales, actual event time for other stock changes.
 async function glurFinDailyFlows(day,dayClosings,daySales){
- const shop=GLUR_SHOP_ID,start=day+'T03:00:00+07:00',end=glurCRShift(day,1)+'T03:00:00+07:00';
+ const shop=GLUR_SHOP_ID,start=day+'T00:00:00+07:00',end=glurCRShift(day,1)+'T00:00:00+07:00';
  // Historical entries may be recorded after the original closing; business date controls reporting.
  const all=async make=>{let rows=[];for(let offset=0;;offset+=1000){const r=await make().range(offset,offset+999);if(r.error)throw r.error;rows.push(...(r.data||[]));if((r.data||[]).length<1000)return rows;}};
  const [stocks,receipts,batches,movements,recipes]=await Promise.all([
