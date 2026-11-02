@@ -1860,12 +1860,12 @@ async function glurLoadResetAudit(){
 function glurRenderResetPanel(){
  if(!glurIsDeveloper())return '';
  const test=GLUR_SHOP_ID===GLUR_TEST_SHOP_ID;
- const scopes=[...(test?[['test-transactions','ล้างยอดทดลอง (แนะนำ)']]:[]),['sales','ล้างยอดขาย'],['expenses','ล้างค่าใช้จ่าย'],['closing','ล้างประวัติปิดยอด'],['prebatch','ล้างสูตรและประวัติ Pre-batch'],['recipes','ล้างสูตรเครื่องดื่ม'],['stock','ล้างสต๊อก'],['all','ล้างข้อมูลธุรกิจทั้งหมด']];
+ const scopes=test?[['test-transactions','เริ่มทดสอบใหม่ · ล้างยอดทดลอง']]:[];
  const scopeLabel=Object.fromEntries(scopes);
  return `<section class="card" style="margin-top:16px;border:1px solid #664b32;border-radius:16px;padding:16px">
  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><strong style="font-size:19px">จัดการข้อมูล</strong><div class="small muted">เฉพาะผู้พัฒนา · owner001 / owner002</div></div><span style="border:1px solid ${test?'#e9b65b':'#c56a60'};border-radius:18px;padding:5px 11px;font-weight:800">${test?'🧪 TEST':'● LIVE'}</span></div>
- <p class="small muted" style="margin:12px 0">${test?'ข้อมูลทดลองแยกจาก LIVE':'กำลังจัดการข้อมูลจริง กรุณาตรวจสอบก่อนดำเนินการ'}</p>
- <form id="glurResetForm" class="stack" autocomplete="off">
+ <p class="small muted" style="margin:12px 0">${test?'ล้างเฉพาะยอดขาย ค่าใช้จ่าย และการปิดยอด TEST · ไม่ลบสูตรหรือสต๊อก':'ปิดการรีเซตข้อมูล LIVE เพื่อป้องกันข้อมูลจริงเสียหาย'}</p>
+ ${test?`<form id="glurResetForm" class="stack" autocomplete="off">
  <div class="field"><label>1. ต้องการล้างอะไร?</label><select name="scope" style="min-height:48px">${scopes.map(([v,l])=>`<option value="${v}" ${test&&v==='test-transactions'?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
  <div id="glurResetScopeHelp" class="small" style="background:#30261f;border-radius:10px;padding:12px;color:#eed7b8"></div>
  <div class="field"><label>2. เหตุผลในการล้าง</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required placeholder="เช่น เริ่มทดสอบยอดขายใหม่">${test?'เริ่มทดสอบยอดขาย TEST ใหม่':''}</textarea></div>
@@ -1876,7 +1876,7 @@ function glurRenderResetPanel(){
  <div class="field"><label>พิมพ์ข้อความยืนยันตามนี้</label><div id="glurResetPhrase" style="font-size:16px;font-weight:800;color:#ffd49a;padding:8px 0">RESET ${test?'TEST SALES':'SALES'}</div><input id="glurResetConfirmation" name="confirmation" type="text" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="พิมพ์ข้อความด้านบน" style="min-height:48px"></div>
  <label class="row small" style="align-items:flex-start;gap:9px"><input type="checkbox" name="backup" required style="width:auto;margin-top:3px">ฉันสำรองข้อมูลที่จำเป็นแล้วและเข้าใจว่าการลบย้อนกลับไม่ได้</label>
  <button class="btn danger full" type="submit" style="min-height:50px">ยืนยันล้างข้อมูล</button>
- </details></form>
+ </details></form>`:`<div class="small muted" style="padding:10px;border:1px solid #5c4638;border-radius:10px">ต้องการจัดการข้อมูลจริงให้ใช้ขั้นตอนสำรองและตรวจสอบแยกต่างหาก</div>`}
  <details style="margin-top:16px;border-top:1px solid #504037;padding-top:14px"><summary style="cursor:pointer;font-weight:700">ประวัติการล้างข้อมูล (${glurResetAudit.length})</summary>
  <div style="margin-top:10px">${glurResetAudit.length?glurResetAudit.map(a=>`<div class="item" style="padding:10px 0"><div><strong>${esc(scopeLabel[a.scope]||a.scope)}</strong><div class="small muted">${esc(glurSaleDate(a.created_at))} · ${esc(a.requested_by?.slice(0,8)||'')}</div><div class="small">${esc(a.reason)}</div></div></div>`).join(''):empty('ยังไม่มีประวัติ หรือยังไม่ได้โหลด')}</div>
  <button class="btn secondary full" id="glurResetAuditRefresh" type="button">โหลดประวัติใหม่</button></details>
@@ -1887,17 +1887,17 @@ renderSettings=function(){
  glurResetPreviousSettings();
  if(!glurIsDeveloper())return;
  const app=document.getElementById('app');app.insertAdjacentHTML('beforeend',glurRenderResetPanel());
- const form=document.getElementById('glurResetForm');
+ const form=document.getElementById('glurResetForm');if(!form){const refresh=document.getElementById('glurResetAuditRefresh');if(refresh)refresh.onclick=glurLoadResetAudit;return;}
  const phrase=()=>{const code=form.elements.scope.value==='test-transactions'?'RESET TEST SALES':'RESET '+form.elements.scope.value.toUpperCase();document.getElementById('glurResetPhrase').textContent=code;form.elements.confirmation.placeholder='';form.elements.confirmation.value=''};
  form.elements.scope.onchange=phrase;phrase();
- const help=document.getElementById('glurResetScopeHelp');const updateHelp=()=>{const descriptions={'test-transactions':'ล้างยอดขาย ค่าใช้จ่าย และประวัติปิดยอดใน TEST เท่านั้น · เก็บสูตรและปริมาณสต๊อกปัจจุบันไว้','sales':'ล้างยอดขายและรายการที่เกี่ยวข้อง · อาจคืนสต๊อกตามข้อมูลการใช้จริง · ต้องไม่มีประวัติปิดยอดค้าง','expenses':'ล้างค่าใช้จ่าย · ต้องไม่มีประวัติปิดยอดค้าง','closing':'ล้างประวัติปิดยอด','prebatch':'ล้างข้อมูล Pre-batch · อาจถูกปฏิเสธหากมีข้อมูลอ้างอิง','recipes':'ล้างสูตรเครื่องดื่ม · อาจถูกปฏิเสธหากมีข้อมูลอ้างอิง','stock':'ล้างสต๊อก · มีผลต่อสูตรและประวัติที่เชื่อมกัน','all':'ล้างข้อมูลธุรกิจทั้งหมด · ไม่ลบบัญชีผู้ใช้หรือสิทธิ์'};help.textContent=descriptions[form.elements.scope.value]||''};form.elements.scope.addEventListener('change',updateHelp);updateHelp();
+ const help=document.getElementById('glurResetScopeHelp');const updateHelp=()=>{const descriptions={'test-transactions':'ล้างยอดขาย ค่าใช้จ่าย และประวัติปิดยอดเฉพาะ TEST · เก็บสูตรและสต๊อกปัจจุบันไว้'};help.textContent=descriptions[form.elements.scope.value]||''};form.elements.scope.addEventListener('change',updateHelp);updateHelp();
  document.getElementById('glurResetAuditRefresh').onclick=glurLoadResetAudit;
  form.onsubmit=async e=>{
   e.preventDefault();const scope=form.elements.scope.value,reason=form.elements.reason.value.trim();
   const confirmation=form.elements.confirmation.value.trim(),password=form.elements.password.value,ownerUsername=form.elements.ownerUsername.value.trim().toLowerCase();
-  if(scope==='all'&&GLUR_SHOP_ID===GLUR_TEST_SHOP_ID&& !confirm('ยืนยันอีกครั้ง: RESET ALL จะลบข้อมูลธุรกิจ TEST ทุกหมวด รวมสูตรและสต๊อก แต่ไม่ลบบัญชีผู้ใช้ ใช่หรือไม่?'))return;
+  if(scope!=='test-transactions'||GLUR_SHOP_ID!==GLUR_TEST_SHOP_ID){toast('อนุญาตเฉพาะการล้างยอดทดลอง TEST');return;}
   if(reason.length<10||confirmation!==(scope==='test-transactions'?'RESET TEST SALES':'RESET '+scope.toUpperCase())||!form.elements.backup.checked){toast('กรุณาตรวจสอบคำยืนยัน เหตุผล และการสำรองข้อมูล');return}
-  if(!confirm('คำเตือน: ลบข้อมูล '+scope+' แบบถาวร และไม่คืนสต๊อกอัตโนมัติ ต้องการดำเนินการต่อหรือไม่?'))return;
+  if(!confirm('ยืนยันล้างยอดทดลอง TEST?\\nยอดขาย ค่าใช้จ่าย และประวัติปิดยอดจะถูกลบ แต่สูตรและสต๊อกปัจจุบันยังอยู่'))return;
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{
    const {data:{session},error:sessionError}=await glurSupabase.auth.getSession();
