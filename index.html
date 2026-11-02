@@ -1859,20 +1859,28 @@ async function glurLoadResetAudit(){
 }
 function glurRenderResetPanel(){
  if(!glurIsDeveloper())return '';
- const scopes=[...(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?[['test-transactions','Set Zero ยอดทดลอง (เก็บสูตรและสต๊อก)']]:[]),['sales','ยอดขายและประวัติปรับยอดขาย'],['expenses','ค่าใช้จ่ายและประวัติยกเลิก'],['prebatch','สูตร Pre-batch และประวัติผลิต'],['recipes','สูตรเครื่องดื่ม'],['stock','สต๊อกและประวัติสต๊อก'],['closing','ประวัติปิดยอด (Snapshot)'],['all','ข้อมูลธุรกิจทั้งหมด (คงบัญชีและสิทธิ์ไว้)']];
- return `<div class="section-title">จัดการระบบ · เฉพาะนักพัฒนา</div>${GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?`<div class="card" style="border:2px solid #f5a65c"><strong>🧪 TEST · Set Zero</strong><p class="small muted">ล้างยอดขาย ค่าใช้จ่าย และปิดยอด TEST แต่เก็บสูตรและยอดสต๊อกปัจจุบันไว้ · ไม่คืนยอดจากการขายเก่า · ต้องสำรองข้อมูลก่อน</p><button type="button" class="btn secondary full" id="glurTestZeroPrepare">Set Zero ยอดทดลอง (เก็บสูตรและสต๊อก)</button></div>`:''}<div class="card" style="border-color:#a74b42">
- <div class="hint warn">การล้างยอดขาย/ค่าใช้จ่ายจะถูกปฏิเสธถ้ายังมีประวัติปิดยอด ต้องล้างหมวดปิดยอดก่อนโดยเจตนา หรือเลือก RESET ALL หลังสำรองข้อมูล · การลบเป็นการลบจริงและไม่คืนยอดสต๊อกอัตโนมัติ · บางหมวดอาจถูกปฏิเสธหากยังมีข้อมูลที่เชื่อมโยงกัน · ต้องสำรองข้อมูลและตรวจสอบก่อน</div>
+ const test=GLUR_SHOP_ID===GLUR_TEST_SHOP_ID;
+ const scopes=[...(test?[['test-transactions','ล้างยอดทดลอง (แนะนำ)']]:[]),['sales','ล้างยอดขาย'],['expenses','ล้างค่าใช้จ่าย'],['closing','ล้างประวัติปิดยอด'],['prebatch','ล้างสูตรและประวัติ Pre-batch'],['recipes','ล้างสูตรเครื่องดื่ม'],['stock','ล้างสต๊อก'],['all','ล้างข้อมูลธุรกิจทั้งหมด']];
+ const scopeLabel=Object.fromEntries(scopes);
+ return `<section class="card" style="margin-top:16px;border:1px solid #664b32;border-radius:16px;padding:16px">
+ <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><strong style="font-size:19px">จัดการข้อมูล</strong><div class="small muted">เฉพาะผู้พัฒนา · owner001 / owner002</div></div><span style="border:1px solid ${test?'#e9b65b':'#c56a60'};border-radius:18px;padding:5px 11px;font-weight:800">${test?'🧪 TEST':'● LIVE'}</span></div>
+ <p class="small muted" style="margin:12px 0">${test?'ข้อมูลทดลองแยกจาก LIVE':'กำลังจัดการข้อมูลจริง กรุณาตรวจสอบก่อนดำเนินการ'}</p>
  <form id="glurResetForm" class="stack" autocomplete="off">
- <div class="field"><label>เลือกหมวดที่ต้องการล้าง</label><select name="scope">${scopes.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('')}</select></div>
- <div class="field"><label>เหตุผล (อย่างน้อย 10 ตัวอักษร)</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required></textarea></div>
- <div class="field"><label for="glurResetConfirmation">พิมพ์คำยืนยันลงในช่องด้านล่าง</label><div id="glurResetPhrase" class="hint" style="font-size:18px;font-weight:800;letter-spacing:1px;color:#ffd49a">RESET SALES</div><input id="glurResetConfirmation" type="text" name="confirmation" required autocomplete="off" autocapitalize="characters" spellcheck="false" style="display:block!important;visibility:visible!important;opacity:1!important;width:100%;min-height:52px;background:#fff!important;color:#171514!important;border:3px solid #e88c32!important;font-size:18px!important;box-sizing:border-box;"></div>
- <div class="field"><label>Username ของ Owner (ID ที่ใช้เข้าสู่ระบบ)</label><input name="ownerUsername" type="text" required pattern="[a-z0-9_]{3,30}" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
- <div class="field"><label>ยืนยันรหัสผ่าน Owner อีกครั้ง</label><input name="password" type="password" required autocomplete="current-password"></div>
- <label class="row small"><input type="checkbox" name="backup" required style="width:auto">ฉันสำรองฐานข้อมูล Supabase แยกต่างหากและเข้าใจว่าการลบย้อนกลับไม่ได้</label>
- <button class="btn danger full" type="submit">ล้างข้อมูลหมวดที่เลือก</button>
- </form></div>
- <div class="section-title">ประวัติการล้างข้อมูล</div><div class="card">${glurResetAudit.length?glurResetAudit.map(a=>`<div class="item"><div><strong>${esc(a.scope)}</strong><div class="small muted">${esc(glurSaleDate(a.created_at))} · ${esc(a.requested_by?.slice(0,8)||'')}</div><div class="small">${esc(a.reason)}</div><div class="small muted">จำนวนที่ลบ: ${esc(JSON.stringify(a.deleted_counts||{}))}</div></div></div>`).join(''):empty('ยังไม่มีประวัติ หรือยังไม่ได้โหลด')}</div>
- <button class="btn secondary full" id="glurResetAuditRefresh" type="button">↻ โหลดประวัติการล้าง</button>`;
+ <div class="field"><label>1. ต้องการล้างอะไร?</label><select name="scope" style="min-height:48px">${scopes.map(([v,l])=>`<option value="${v}" ${test&&v==='test-transactions'?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+ <div id="glurResetScopeHelp" class="small" style="background:#30261f;border-radius:10px;padding:12px;color:#eed7b8"></div>
+ <div class="field"><label>2. เหตุผลในการล้าง</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required placeholder="เช่น เริ่มทดสอบยอดขายใหม่">${test?'เริ่มทดสอบยอดขาย TEST ใหม่':''}</textarea></div>
+ <details style="border:1px solid #55453b;border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:700">3. ยืนยันตัวตนและดำเนินการ</summary>
+ <div class="small muted" style="margin:12px 0">เพื่อป้องกันการลบโดยไม่ตั้งใจ ต้องใช้บัญชีที่กำลังเข้าสู่ระบบอยู่และยืนยันรหัสผ่านอีกครั้ง</div>
+ <div class="field"><label>ชื่อบัญชีผู้พัฒนา</label><input name="ownerUsername" type="text" required pattern="[a-z0-9_]{3,30}" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="owner001 หรือ owner002"></div>
+ <div class="field"><label>รหัสผ่านบัญชี</label><input name="password" type="password" required autocomplete="current-password" placeholder="รหัสผ่านที่ใช้เข้าสู่ระบบ"></div>
+ <div class="field"><label>พิมพ์ข้อความยืนยันตามนี้</label><div id="glurResetPhrase" style="font-size:16px;font-weight:800;color:#ffd49a;padding:8px 0">RESET ${test?'TEST SALES':'SALES'}</div><input id="glurResetConfirmation" name="confirmation" type="text" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="พิมพ์ข้อความด้านบน" style="min-height:48px"></div>
+ <label class="row small" style="align-items:flex-start;gap:9px"><input type="checkbox" name="backup" required style="width:auto;margin-top:3px">ฉันสำรองข้อมูลที่จำเป็นแล้วและเข้าใจว่าการลบย้อนกลับไม่ได้</label>
+ <button class="btn danger full" type="submit" style="min-height:50px">ยืนยันล้างข้อมูล</button>
+ </details></form>
+ <details style="margin-top:16px;border-top:1px solid #504037;padding-top:14px"><summary style="cursor:pointer;font-weight:700">ประวัติการล้างข้อมูล (${glurResetAudit.length})</summary>
+ <div style="margin-top:10px">${glurResetAudit.length?glurResetAudit.map(a=>`<div class="item" style="padding:10px 0"><div><strong>${esc(scopeLabel[a.scope]||a.scope)}</strong><div class="small muted">${esc(glurSaleDate(a.created_at))} · ${esc(a.requested_by?.slice(0,8)||'')}</div><div class="small">${esc(a.reason)}</div></div></div>`).join(''):empty('ยังไม่มีประวัติ หรือยังไม่ได้โหลด')}</div>
+ <button class="btn secondary full" id="glurResetAuditRefresh" type="button">โหลดประวัติใหม่</button></details>
+ </section>`;
 }
 const glurResetPreviousSettings=renderSettings;
 renderSettings=function(){
@@ -1882,7 +1890,7 @@ renderSettings=function(){
  const form=document.getElementById('glurResetForm');
  const phrase=()=>{const code=form.elements.scope.value==='test-transactions'?'RESET TEST SALES':'RESET '+form.elements.scope.value.toUpperCase();document.getElementById('glurResetPhrase').textContent=code;form.elements.confirmation.placeholder='';form.elements.confirmation.value=''};
  form.elements.scope.onchange=phrase;phrase();
- const zeroBtn=document.getElementById('glurTestZeroPrepare');if(zeroBtn)zeroBtn.onclick=()=>{if(GLUR_SHOP_ID!==GLUR_TEST_SHOP_ID)return;form.elements.scope.value='test-transactions';form.elements.reason.value='ล้างยอดขาย TEST เพื่อเริ่มทดสอบระบบใหม่';phrase();form.scrollIntoView({behavior:'smooth',block:'start'});toast('เลือก RESET TEST SALES แล้ว · โปรดยืนยันและสำรองข้อมูลก่อน')};
+ const help=document.getElementById('glurResetScopeHelp');const updateHelp=()=>{const descriptions={'test-transactions':'ล้างยอดขาย ค่าใช้จ่าย และประวัติปิดยอดใน TEST เท่านั้น · เก็บสูตรและปริมาณสต๊อกปัจจุบันไว้','sales':'ล้างยอดขายและรายการที่เกี่ยวข้อง · อาจคืนสต๊อกตามข้อมูลการใช้จริง · ต้องไม่มีประวัติปิดยอดค้าง','expenses':'ล้างค่าใช้จ่าย · ต้องไม่มีประวัติปิดยอดค้าง','closing':'ล้างประวัติปิดยอด','prebatch':'ล้างข้อมูล Pre-batch · อาจถูกปฏิเสธหากมีข้อมูลอ้างอิง','recipes':'ล้างสูตรเครื่องดื่ม · อาจถูกปฏิเสธหากมีข้อมูลอ้างอิง','stock':'ล้างสต๊อก · มีผลต่อสูตรและประวัติที่เชื่อมกัน','all':'ล้างข้อมูลธุรกิจทั้งหมด · ไม่ลบบัญชีผู้ใช้หรือสิทธิ์'};help.textContent=descriptions[form.elements.scope.value]||''};form.elements.scope.addEventListener('change',updateHelp);updateHelp();
  document.getElementById('glurResetAuditRefresh').onclick=glurLoadResetAudit;
  form.onsubmit=async e=>{
   e.preventDefault();const scope=form.elements.scope.value,reason=form.elements.reason.value.trim();
