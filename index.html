@@ -366,7 +366,10 @@ body{background:#100f0f;font-size:14px;line-height:1.55}
 /* Compact recipe detail: mobile first, no changes to data or handlers */
 .glur-recipe-detail-card{padding:14px!important}
 .glur-recipe-detail-card .image-slot{height:96px!important;border-radius:10px;margin:0 0 10px}
-.glur-recipe-detail-card .image-slot img{object-fit:contain}
+.glur-recipe-detail-card .image-slot img{object-fit:contain;object-position:center;width:100%;height:100%}
+.glur-recipe-detail-card .image-slot{background:#201a17!important;max-width:100%;height:148px!important;display:flex;align-items:center;justify-content:center}
+.glur-recipe-detail-card .image-slot img{width:auto!important;max-width:100%!important;height:100%!important;max-height:148px!important;aspect-ratio:auto!important;border-radius:9px}
+@media(max-width:390px){.glur-recipe-detail-card .image-slot{height:132px!important}.glur-recipe-detail-card .image-slot img{max-height:132px!important}}
 .glur-recipe-detail-card .detail-head{display:flex;align-items:center!important;gap:10px!important;margin-top:4px!important;margin-bottom:12px}
 .glur-recipe-detail-card .detail-head h2{font-size:clamp(20px,5.5vw,25px)!important;line-height:1.25!important;margin:0 0 4px!important}
 .glur-recipe-detail-card .detail-head .small{font-size:12px;line-height:1.45}
