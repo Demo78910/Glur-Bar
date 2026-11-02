@@ -2160,8 +2160,8 @@ async function glurTestFinanceExport(kind){
  if(!glurCRLoaded||!cs.length)throw Error('ไม่มีข้อมูลปิดยอดในช่วงวันที่เลือก กรุณาเลือกช่วงวันที่มีการปิดยอดและกดโหลดรายงาน');
  const ids=cs.map(c=>c.id);
  const [stockResult,saleResult,catalog]=await Promise.all([
- glurSupabase.from('glur_test_closing_stock_snapshots').select('closing_id,stock_id,stock_name,unit,quantity,cost_per_unit').eq('shop_id',GLUR_SHOP_ID).in('closing_id',ids).limit(10000),
- glurSupabase.from('glur_sales').select('id,recipe_name,quantity_sold,total_amount,total_cost,sold_at').eq('shop_id',GLUR_SHOP_ID).gte('sold_at',from+'T00:00:00+07:00').lte('sold_at',glurCRShift(to,2)+'T00:00:00+07:00').order('sold_at').limit(10000),
+ glurFinReadAll(()=>glurSupabase.from('glur_test_closing_stock_snapshots').select('closing_id,stock_id,stock_name,unit,quantity,cost_per_unit').eq('shop_id',GLUR_SHOP_ID).in('closing_id',ids).order('closing_id').order('stock_id')).then(data=>({data,error:null})),
+ glurFinReadAll(()=>glurSupabase.from('glur_sales').select('id,recipe_name,quantity_sold,total_amount,total_cost,sold_at').eq('shop_id',GLUR_SHOP_ID).gte('sold_at',from+'T00:00:00+07:00').lte('sold_at',glurCRShift(to,2)+'T00:00:00+07:00').order('sold_at').order('id')).then(data=>({data,error:null})),
  glurFinLoadCatalog()
  ]);
  if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
