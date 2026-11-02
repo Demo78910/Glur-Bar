@@ -884,10 +884,10 @@ glurSupabase.auth.onAuthStateChange((event,session)=>{
 let stockMainFilter='all',stockSubFilter='all',stockSearch='',stockDetailId=null,stockEditing=false;
 let recipeSearch='',recipeDetailId=null;
 const glurCategories=[
- {id:'liquor',label:'เหล้า · Liquor',subs:[['gin','Gin'],['vodka','Vodka'],['rum','Rum'],['whisky','Whisky'],['tequila','Tequila'],['brandy','Brandy'],['liqueur','Liqueur'],['vermouth','Vermouth'],['bitters','Bitters'],['thai_spirits','Thai Spirits'],['other','อื่น ๆ']]},
+ {id:'liquor',label:'เหล้า · Liquor',subs:[['gin','Gin'],['vodka','Vodka'],['rum','Rum'],['whisky','Whisky'],['tequila','Tequila'],['brandy','Brandy'],['liqueur','Liqueur'],['vermouth','Vermouth'],['bitters','Bitters'],['thai_spirits','Thai Spirits'],['infused_batch','Batch / เหล้าที่เตรียมเอง'],['other','อื่น ๆ']]},
  {id:'mixer',label:'มิกเซอร์ · Mixer',subs:[['syrup','Syrup'],['juice','Juice'],['soda','Soda'],['tonic','Tonic'],['other','อื่น ๆ']]},
  {id:'fresh',label:'ของสด · Fresh',subs:[['fruit','ผลไม้'],['herb','สมุนไพร'],['garnish','Garnish'],['other','อื่น ๆ']]},
- {id:'other',label:'อื่น ๆ · Other',subs:[['other','อื่น ๆ']]},
+ {id:'other',label:'อื่น ๆ · Other',subs:[['seasoning','ผงปรุงรส'],['other','อื่น ๆ']]},
  {id:'uncategorized',label:'ยังไม่จัดหมวด',subs:[['other','อื่น ๆ']]}
 ];
 function inferStockCategory(x){
