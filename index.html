@@ -384,6 +384,18 @@ body{background:#100f0f;font-size:14px;line-height:1.55}
 .glur-recipe-detail-card .tableline{padding:10px 0!important;font-size:14px}
 @media(min-width:600px){.glur-recipe-detail-card .image-slot{height:140px!important}.glur-recipe-detail-card{padding:20px!important}}
 </style>
+<style id="glur-stock-search-picker-v1">
+.glur-recipe-ingredient .glur-stock-picker{position:relative;min-width:0;width:100%}
+.glur-recipe-ingredient .glur-stock-search{width:100%;font-size:16px!important;min-height:46px!important}
+.glur-recipe-ingredient .glur-stock-native{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;left:0!important;bottom:0!important;padding:0!important;border:0!important}
+.glur-stock-results{position:relative;z-index:5;max-height:240px;overflow-y:auto;overscroll-behavior:contain;border:1px solid #8e5538;border-radius:10px;margin-top:5px;background:#241c19}
+.glur-stock-results[hidden]{display:none!important}
+.glur-stock-choice{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;text-align:left;padding:12px;border:0;border-bottom:1px solid #4b3830;background:transparent;color:#fff;font:inherit;cursor:pointer}
+.glur-stock-choice:last-child{border-bottom:0}
+.glur-stock-choice strong{font-size:14px;overflow-wrap:anywhere}
+.glur-stock-choice small{font-size:12px;color:#dca884;white-space:nowrap}
+.glur-stock-empty{padding:12px;color:#dca884;font-size:13px}
+</style>
 </head>
 <body>
 <header class="top"><div class="brand">GLUR <span style="font-size:12px;letter-spacing:5px">BAR</span></div><div class="sub">STOCK · RECIPES · SALES · REPORTS</div></header>
@@ -1041,7 +1053,26 @@ function renderRecipeDetail(){
  };
  document.getElementById('recipeCancel').onclick=()=>{if(fresh)recipeDetailId=null;recipeEditMode=false;renderRecipes()};
  const rows=document.getElementById('cloudIngredientRows');
- function addRow(stockId='',qty=''){const div=document.createElement('div');div.className='ingredient-row glur-recipe-ingredient';div.innerHTML=`<select aria-label="วัตถุดิบ" required><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select><div class="glur-ingredient-bottom"><input aria-label="ปริมาณ" placeholder="ปริมาณที่ใช้" type="number" step="any" min="0.000001" required value="${esc(qty)}"><button type="button" class="btn danger smallbtn" aria-label="ลบส่วนผสม">×</button></div>`;div.querySelector('button').onclick=()=>div.remove();rows.appendChild(div)}
+ function addRow(stockId='',qty=''){
+  const div=document.createElement('div');div.className='ingredient-row glur-recipe-ingredient';
+  const current=cloudStock.find(s=>s.id===stockId);
+  div.innerHTML=`<div class="glur-stock-picker"><input type="search" class="glur-stock-search" placeholder="🔎 ค้นหาวัตถุดิบ เช่น Absolut" aria-label="ค้นหาวัตถุดิบ" autocomplete="off" value="${current?esc(current.name):''}"><div class="glur-stock-results" hidden></div><select aria-label="วัตถุดิบ" required class="glur-stock-native"><option value="">เลือกวัตถุดิบ</option>${cloudStock.map(s=>`<option value="${s.id}" ${s.id===stockId?'selected':''}>${esc(s.name)} (${esc(s.unit)})</option>`).join('')}</select></div><div class="glur-ingredient-bottom"><input aria-label="ปริมาณ" placeholder="ปริมาณที่ใช้" type="number" step="any" min="0.000001" required value="${esc(qty)}"><button type="button" class="btn danger smallbtn" aria-label="ลบส่วนผสม">×</button></div>`;
+  const search=div.querySelector('.glur-stock-search'),results=div.querySelector('.glur-stock-results'),select=div.querySelector('select');
+  function showMatches(){
+   const q=search.value.trim().toLocaleLowerCase();
+   const matches=cloudStock.filter(s=>!q||String(s.name).toLocaleLowerCase().includes(q)).slice(0,35);
+   results.innerHTML=matches.map(s=>`<button type="button" class="glur-stock-choice" data-stock-id="${s.id}"><strong>${esc(s.name)}</strong><small>${esc(s.unit)}</small></button>`).join('')||'<div class="glur-stock-empty">ไม่พบวัตถุดิบในสต๊อกโหมดนี้</div>';
+   results.hidden=false;
+   results.querySelectorAll('[data-stock-id]').forEach(b=>b.onclick=()=>{select.value=b.dataset.stockId;search.value=cloudStock.find(s=>s.id===select.value)?.name||'';results.hidden=true;search.blur()});
+  }
+  search.addEventListener('focus',showMatches);
+  search.addEventListener('input',()=>{select.value='';showMatches()});
+  search.addEventListener('keydown',e=>{if(e.key==='Escape')results.hidden=true});
+  search.addEventListener('blur',()=>setTimeout(()=>{results.hidden=true},180));
+  select.addEventListener('change',()=>{search.value=cloudStock.find(s=>s.id===select.value)?.name||''});
+  div.querySelector('.glur-ingredient-bottom button').onclick=()=>div.remove();
+  rows.appendChild(div);
+ }
  (r.ingredients||[]).forEach(i=>addRow(i.stock_id,i.quantity));
  document.getElementById('recipeAddIng').onclick=()=>addRow();const getNonstock=nsEditor('recipeNonstockRows','recipeAddNonstock',r.nonstock||[]);
  const glassSelect=document.getElementById('glurGlasswareSelect'),glassCustom=document.getElementById('glurGlasswareCustom'),glassValue=document.getElementById('glurGlasswareValue');
