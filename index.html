@@ -2313,6 +2313,8 @@ async function glurTestFinanceExport(kind){
  const flowUsed=flows.filter(x=>x.used>0),flowAdded=flows.filter(x=>x.added>0);
  const flowHeight=220+Math.max(1,flowUsed.length)*46+Math.max(1,flowAdded.length)*46;
  const sortedItems=items.slice().sort((a,b)=>glurFinStockCategory(a.stock_name).localeCompare(glurFinStockCategory(b.stock_name),'th')||a.stock_name.localeCompare(b.stock_name,'th'));
+ const flowById=new Map(flows.map(x=>[String(x.id),x]));
+ const stockDailyRows=sortedItems.map(x=>{const flow=flowById.get(String(x.stock_id));const ending=x.quantity===null?null:Number(x.quantity);const used=flow?.used||0,added=flow?.added||0;return {...x,opening:ending===null?null:ending+used-added,used,added,ending};});
  const menuLines=Array.from(menus.entries()).sort((a,b)=>b[1].qty-a[1].qty);
  const canvas=document.createElement('canvas');canvas.width=1080;
  const rowHeight=46,menuTop=475,flowTop=menuTop+85+Math.max(1,menuLines.length)*rowHeight,stockTop=flowTop+flowHeight;const categories=Array.from(new Set(sortedItems.map(x=>glurFinStockCategory(x.stock_name))));
@@ -2337,12 +2339,13 @@ async function glurTestFinanceExport(kind){
   if(!list.length){ctx.fillStyle='#bbbbbb';ctx.font='22px sans-serif';ctx.fillText('ไม่มีรายการที่บันทึกไว้',55,y);y+=rowHeight}
   for(const x of list){ctx.fillStyle='#fff';ctx.font='23px sans-serif';ctx.fillText(x.name,55,y,720);ctx.textAlign='right';ctx.fillStyle=color;ctx.fillText(sign+Number(x[key]).toLocaleString('th-TH',{maximumFractionDigits:3})+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}y+=45;
  }
- y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อกคงเหลือทั้งหมด ('+sortedItems.length+' รายการ)',50,y);
- y+=58;let currentCategory='';for(let i=0;i<sortedItems.length;i++){const x=sortedItems[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){if(currentCategory)y+=rowHeight;currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
- ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,740);
- ctx.textAlign='right';ctx.fillText(glurFinQuantityLabel(x),1020,y);ctx.textAlign='left';y+=rowHeight}
+ y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อกวันนั้น: ต้นวัน / ใช้ / รับ / คงเหลือ ('+sortedItems.length+' รายการ)',50,y);
+ y+=58;let currentCategory='';for(let i=0;i<stockDailyRows.length;i++){const x=stockDailyRows[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){if(currentCategory)y+=rowHeight;currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
+ ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,460);
+ const fmtQty=v=>v===null?'ไม่มีข้อมูล':Number(v).toLocaleString('th-TH',{maximumFractionDigits:3});
+ ctx.textAlign='right';ctx.font='20px sans-serif';ctx.fillStyle='#cccccc';ctx.fillText('ต้น '+fmtQty(x.opening),700,y);ctx.fillStyle='#ff7070';ctx.fillText('−'+fmtQty(x.used),805,y);ctx.fillStyle='#55d58a';ctx.fillText('+'+fmtQty(x.added),895,y);ctx.fillStyle='#ffffff';ctx.fillText('เหลือ '+fmtQty(x.ending)+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
  y=glurFinDrawNonstock(ctx,dailyNonstock,y,rowHeight);
- ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('รับเข้า/ผลิตตามเวลาจริง · คงเหลือเป็น Snapshot ณ ปิดยอด · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
+ ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ต้นวันคำนวณย้อนจาก Snapshot และรายการเคลื่อนไหวที่บันทึก · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพไม่สำเร็จ');
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_Daily_'+day+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
