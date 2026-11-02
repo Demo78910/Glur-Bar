@@ -2388,13 +2388,13 @@ async function glurTestFinanceExport(kind){
   if(!list.length){ctx.fillStyle='#bbbbbb';ctx.font='22px sans-serif';ctx.fillText('ไม่มีรายการที่บันทึกไว้',55,y);y+=rowHeight}
   for(const x of list){ctx.fillStyle='#fff';ctx.font='23px sans-serif';ctx.fillText(x.name,55,y,720);ctx.textAlign='right';ctx.fillStyle=color;ctx.fillText(sign+Number(x[key]).toLocaleString('th-TH',{maximumFractionDigits:3})+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}y+=45;
  }
- y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText((historicalSnapshot?'สต๊อกย้อนหลัง (ยอดต้น/คงเหลือยังยืนยันไม่ได้)':'สต๊อกวันนั้น: ต้นวัน / ใช้ / รับ / คงเหลือ')+' ('+sortedItems.length+' รายการ)',50,y);
+ y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อกคำนวณย้อนหลัง: ต้นวัน / ใช้ / รับ / คงเหลือ'+' ('+sortedItems.length+' รายการ)',50,y);
  y+=58;let currentCategory='';for(let i=0;i<stockDailyRows.length;i++){const x=stockDailyRows[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){if(currentCategory)y+=rowHeight;currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
  ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,460);
  const fmtQty=v=>v===null?'ไม่มีข้อมูล':Number(v).toLocaleString('th-TH',{maximumFractionDigits:3});
  ctx.textAlign='right';ctx.font='20px sans-serif';ctx.fillStyle='#cccccc';ctx.fillText('ต้น '+fmtQty(x.opening),700,y);ctx.fillStyle='#ff7070';ctx.fillText('−'+fmtQty(x.used),805,y);ctx.fillStyle='#55d58a';ctx.fillText('+'+fmtQty(x.added),895,y);ctx.fillStyle='#ffffff';ctx.fillText('เหลือ '+fmtQty(x.ending)+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
  y=glurFinDrawNonstock(ctx,dailyNonstock,y,rowHeight);
- ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ต้นวันคำนวณย้อนจาก Snapshot และรายการเคลื่อนไหวที่บันทึก · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
+ ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ยอดย้อนหลังคำนวณจากสต๊อกปัจจุบันและประวัติรายการที่มีวันที่ · อาจมีรายการที่ยังไม่บันทึก · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพไม่สำเร็จ');
  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_Daily_'+day+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
