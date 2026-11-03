@@ -2239,7 +2239,7 @@ async function glurTestFinanceExport(kind){
  ]);
  if(stockResult.error)throw stockResult.error;if(saleResult.error)throw saleResult.error;
  const stock=(stockResult.data||[]);for(const c of cs){const complete=glurFinCompleteSnapshot(stock.filter(x=>x.closing_id===c.id),catalog,c.id);for(const row of complete)if(row.missing_snapshot)stock.push(row)}
- const bangkokDay=(iso)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(iso));
+ const bangkokDay=(iso)=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(iso)).map(x=>[x.type,x.value]));return p.year+'-'+p.month+'-'+p.day;};
  const sales=(saleResult.data||[]).map(s=>{
   const t=Date.parse(s.sold_at);
   const date=bangkokDay(s.sold_at);
@@ -2390,7 +2390,7 @@ async function glurTestFinanceExport(kind){
  const allSaleLines=await allHistorical(()=>glurSupabase.from('glur_sale_ingredients').select('id,sale_id,stock_id,quantity_used').in('sale_id',allSales.map(x=>x.id).length?allSales.map(x=>x.id):['00000000-0000-0000-0000-000000000000']).order('id'));
  const allBatchInputs=await allHistorical(()=>glurSupabase.from('glur_prebatch_batch_inputs').select('batch_id,stock_id,quantity_used').in('batch_id',allBatches.map(x=>x.id).length?allBatches.map(x=>x.id):['00000000-0000-0000-0000-000000000000']).order('batch_id'));
  const todayEnd=Date.parse(glurCRShift(day,1)+'T00:00:00+07:00');
- const businessDayOf=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(t));
+ const businessDayOf=t=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(t)).map(x=>[x.type,x.value]));return p.year+'-'+p.month+'-'+p.day;};
  const afterDay=t=>Date.parse(t)>=todayEnd;
  const afterBusinessDay=t=>t>day;
  const futureDelta=new Map();const addFuture=(id,qty)=>{if(!id||!Number.isFinite(Number(qty)))return;futureDelta.set(id,(futureDelta.get(id)||0)+Number(qty))};
