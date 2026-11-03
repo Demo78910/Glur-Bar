@@ -3142,6 +3142,8 @@ function renderGlurBackdatedSales(){
 
 /* Developer-only TEST historical import; all writes use authenticated, server-validated RPCs. */
 let glurHistoricalImportBusy=false; // TEST import state
+let glurHistoricalPending=[];
+let glurHistoricalImportLog='';
 const glurOriginalBackdatedRender=renderGlurBackdatedSales;
 renderGlurBackdatedSales=function(){
  glurOriginalBackdatedRender();
@@ -3149,9 +3151,9 @@ renderGlurBackdatedSales=function(){
  const host=document.querySelector('.backdated-ui');if(!host)return;
  const panel=document.createElement('section');panel.className='card';panel.style.marginBottom='14px';
  panel.innerHTML='<div class="section-title">นำเข้ายอดขายย้อนหลัง TEST · 27 ต.ค.–2 พ.ย. 2026</div><p class="small muted">รายการ 34 บรรทัด รวม Custom Cocktail 4 แก้วตามส่วนผสมจริง · ระบบบันทึกทีละรายการ ตรวจสิทธิ์และสต๊อกทุกครั้ง · ไม่กระทบ LIVE</p><div id="glurHistoricalImportSummary" class="small muted">กดตรวจสอบเพื่อดูรายการค้างบันทึก</div><div class="actions"><button type="button" class="btn secondary smallbtn" id="glurHistoricalInspect">ตรวจสอบรายการ</button><button type="button" class="btn smallbtn" id="glurHistoricalPost" disabled>ยืนยันบันทึกยอดขายที่ค้าง</button></div><div id="glurHistoricalImportLog" class="small" style="white-space:pre-wrap;max-height:220px;overflow:auto"></div>';
- host.prepend(panel);
- let rows=[];
- const inspect=async()=>{const {data,error}=await glurSupabase.rpc('glur_list_staged_historical_sales');if(error){panel.querySelector('#glurHistoricalImportSummary').textContent='ตรวจสอบไม่ได้: '+error.message;return}rows=Array.isArray(data)?data:[];const pending=rows.filter(x=>x.status==='staged');const posted=rows.filter(x=>x.status==='posted');const total=pending.reduce((a,x)=>a+Number(x.unit_price)*Number(x.quantity),0);panel.querySelector('#glurHistoricalImportSummary').textContent='ค้าง '+pending.length+' รายการ · '+pending.reduce((a,x)=>a+Number(x.quantity),0)+' หน่วย · '+money(total)+' | บันทึกแล้ว '+posted.length+' รายการ';panel.querySelector('#glurHistoricalPost').disabled=!pending.length||glurHistoricalImportBusy;};
+ host.prepend(panel);panel.querySelector('#glurHistoricalImportLog').textContent=glurHistoricalImportLog;
+ let rows=glurHistoricalPending;
+ const inspect=async()=>{const {data,error}=await glurSupabase.rpc('glur_list_staged_historical_sales');if(error){panel.querySelector('#glurHistoricalImportSummary').textContent='ตรวจสอบไม่ได้: '+error.message;return}rows=Array.isArray(data)?data:[];glurHistoricalPending=rows;const pending=rows.filter(x=>x.status==='staged');const posted=rows.filter(x=>x.status==='posted');const total=pending.reduce((a,x)=>a+Number(x.unit_price)*Number(x.quantity),0);panel.querySelector('#glurHistoricalImportSummary').textContent='ค้าง '+pending.length+' รายการ · '+pending.reduce((a,x)=>a+Number(x.quantity),0)+' หน่วย · '+money(total)+' | บันทึกแล้ว '+posted.length+' รายการ';panel.querySelector('#glurHistoricalPost').disabled=!pending.length||glurHistoricalImportBusy;};
  panel.querySelector('#glurHistoricalInspect').onclick=inspect;
  panel.querySelector('#glurHistoricalPost').onclick=async()=>{
   if(glurHistoricalImportBusy)return;
@@ -3159,8 +3161,8 @@ renderGlurBackdatedSales=function(){
   if(!confirm('ยืนยันบันทึกยอดขายย้อนหลัง TEST '+pending.length+' รายการ?\\nระบบจะตัดสต๊อกจริงและบันทึกวันที่ตามประวัติ โดยไม่แก้ LIVE'))return;
   glurHistoricalImportBusy=true;panel.querySelector('#glurHistoricalPost').disabled=true;
   const log=panel.querySelector('#glurHistoricalImportLog');let success=0;
-  for(const line of pending){const {error}=await glurSupabase.rpc('glur_post_staged_historical_sale',{p_line_id:line.id});if(error){log.textContent+='\\nหยุดที่ '+line.business_date+' '+line.recipe_name+': '+error.message;break}success++;log.textContent+='\\n✓ '+line.business_date+' '+line.recipe_name+' × '+line.quantity;log.scrollTop=log.scrollHeight;}
-  glurHistoricalImportBusy=false;log.textContent+='\\nบันทึกเพิ่ม '+success+' รายการ ตรวจสอบยอดค้างก่อนลองต่อ';await inspect();await Promise.all([loadCloudStock(),loadGlurSales(),glurLoadBackdatedSales(),glurLoadFinance()]);};
+  for(const line of pending){const {error}=await glurSupabase.rpc('glur_post_staged_historical_sale',{p_line_id:line.id});if(error){glurHistoricalImportLog+='\\nหยุดที่ '+line.business_date+' '+line.recipe_name+': '+error.message;break}success++;glurHistoricalImportLog+='\\n✓ '+line.business_date+' '+line.recipe_name+' × '+line.quantity;log.textContent=glurHistoricalImportLog;log.scrollTop=log.scrollHeight;}
+  glurHistoricalImportBusy=false;glurHistoricalImportLog+='\\nบันทึกเพิ่ม '+success+' รายการ ตรวจสอบยอดค้างก่อนลองต่อ';await inspect();await Promise.all([loadCloudStock(),loadGlurSales(),glurLoadBackdatedSales(),glurLoadFinance()]);};
  inspect();
 };
 </script>
