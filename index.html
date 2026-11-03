@@ -1694,7 +1694,7 @@ async function glurLoadFinance(){
   const rows=[];const batch=500;
   for(let offset=0;offset<50000;offset+=batch){
    const {data,error}=await glurSupabase.from('glur_sales')
-    .select('id,sold_at,created_at,total_amount,total_cost,quantity_sold,recipe_name')
+    .select('id,sold_at,created_at,total_amount,total_cost,quantity_sold,recipe_name,is_backdated,backdated_business_date')
     .eq('shop_id',GLUR_SHOP_ID).order('sold_at',{ascending:false})
     .range(offset,offset+batch-1);
    if(error)throw error;
@@ -1705,12 +1705,17 @@ async function glurLoadFinance(){
  }catch(e){glurFinanceError=e.message||String(e);glurFinanceReady=false}
  finally{glurFinanceLoading=false;if(currentUser&&page==='dashboard')renderDashboard();if(currentUser&&page==='reports')renderReports()}
 }
-function glurFinanceMonth(m){return glurFinanceRows.filter(x=>{
- const d=x.sold_at||x.created_at;return d&&String(d).slice(0,7)===m;
-})}
-function glurFinanceStats(m){const rows=glurFinanceMonth(m);return {
+function glurFinanceBusinessDay(x){
+ if(x.is_backdated&&x.backdated_business_date)return String(x.backdated_business_date).slice(0,10);
+ const t=x.sold_at||x.created_at;if(!t)return '';
+ const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(t)).map(p=>[p.type,p.value]));
+ return parts.year+'-'+parts.month+'-'+parts.day;
+}
+function glurFinanceMonth(m){return glurFinanceRows.filter(x=>glurFinanceBusinessDay(x).slice(0,7)===m)}
+function glurFinanceStats(m){const rows=glurFinanceMonth(m),free=rows.filter(x=>x.recipe_name==='Regency แก้ว'&&num(x.total_amount)===0);return {
  rows,revenue:sum(rows,x=>num(x.total_amount)),cost:sum(rows,x=>num(x.total_cost)),
- qty:sum(rows,x=>num(x.quantity_sold)||1)
+ qty:sum(rows,x=>num(x.quantity_sold))-sum(free,x=>num(x.quantity_sold)),
+ freeQty:sum(free,x=>num(x.quantity_sold))
 }}
 function glurFinanceNote(){return glurFinanceError?`<div class="hint warn">โหลดข้อมูลยอดขายไม่สำเร็จ: ${esc(glurFinanceError)}</div>`:
  !glurFinanceReady?'<div class="hint">กำลังโหลดข้อมูลยอดขายออนไลน์…</div>':
@@ -1718,7 +1723,7 @@ function glurFinanceNote(){return glurFinanceError?`<div class="hint warn">โ�
 function renderDashboard(){
  const m=monthNow(),v=glurFinanceStats(m),low=cloudStock.filter(s=>num(s.quantity)<=num(s.min_quantity));
  const summary=`<div class="dashboard-head"><div><div class="dashboard-eyebrow">ภาพรวมการดำเนินงาน · ${esc(m)}</div></div><button class="btn secondary smallbtn" id="financeRefresh">↻ รีเฟรชข้อมูล</button></div>`;
- const kpis=`<div class="dashboard-stats">${metric('ยอดขายเดือนนี้',glurFinanceReady?money(v.revenue):'—')}${metric('ต้นทุนเครื่องดื่ม',glurFinanceReady?money(v.cost):'—')}${metric('กำไรขั้นต้น',glurFinanceReady?money(v.revenue-v.cost):'—')}${metric('จำนวนแก้วที่ขาย',glurFinanceReady?v.qty.toLocaleString('th-TH')+' แก้ว':'—')}</div>`;
+ const kpis=`<div class="dashboard-stats">${metric('ยอดขายเดือนนี้',glurFinanceReady?money(v.revenue):'—')}${metric('ต้นทุนเครื่องดื่ม',glurFinanceReady?money(v.cost):'—')}${metric('กำไรขั้นต้น',glurFinanceReady?money(v.revenue-v.cost):'—')}${metric('จำนวนแก้วที่ขาย',glurFinanceReady?v.qty.toLocaleString('th-TH')+' แก้ว':'—')}${metric('เสิร์ฟฟรี ENT',glurFinanceReady?v.freeQty.toLocaleString('th-TH')+' แก้ว':'—')}</div>`;
  const lowStock=low.length?low.slice(0,7).map(s=>`<div class="item"><div class="item-name">${esc(s.name)}</div><strong class="warn">${num(s.quantity)} ${esc(s.unit)}</strong></div>`).join(''):`<div class="empty">✓ ไม่มีวัตถุดิบที่ต่ำกว่าระดับแจ้งเตือน</div>`;
  const main=`<div class="dashboard-main"><section class="dashboard-panel"><h3>สต็อกที่ต้องดูแล</h3><div class="panel-sub">วัตถุดิบที่เหลือน้อยหรือถึงระดับแจ้งเตือน · ${low.length} รายการ</div>${lowStock}${low.length>7?`<div class="small muted">และอีก ${low.length-7} รายการ</div>`:''}<div style="margin-top:14px"><button class="btn secondary smallbtn" onclick="setPage('stock')">ดูสต็อกทั้งหมด →</button></div></section><section class="dashboard-panel"><h3>เริ่มทำงาน</h3><div class="panel-sub">เข้าถึงงานที่ใช้บ่อยได้ในคลิกเดียว</div><div class="dashboard-quick"><button class="btn secondary" onclick="setPage('sales')">บันทึกการขาย</button><button class="btn secondary" onclick="setPage('receiving')">รับสินค้า</button><button class="btn secondary" onclick="setPage('recipes')">จัดการสูตร</button><button class="btn secondary" onclick="setPage('reports')">ดูรายงาน</button></div></section></div>`;
  const notice=glurFinanceError?`<div class="dashboard-notice">โหลดข้อมูลยอดขายไม่สำเร็จ: ${esc(glurFinanceError)}</div>`:!glurFinanceReady?`<div class="dashboard-notice">กำลังโหลดข้อมูลยอดขายจาก Supabase…</div>`:`<div class="dashboard-notice">ยอดขายและต้นทุนมาจาก Supabase · กำไรที่แสดงเป็นกำไรขั้นต้น ยังไม่หักค่าใช้จ่ายอื่น</div>`;
