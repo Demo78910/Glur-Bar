@@ -3410,6 +3410,40 @@ renderStock=function(){original();install()};
 if(typeof page!=='undefined'&&page==='stock')install();
 })();
 </script>
+
+<script id="glur-daily-stock-reconciliation-v1">
+(function(){
+let active=false;
+function install(){
+ if(typeof page==='undefined'||page!=='stock'||typeof glurSupabase==='undefined'||!document.getElementById('app'))return;
+ const host=document.getElementById('app');if(host.querySelector('#glurDailyLedger'))return;
+ const panel=document.createElement('details');panel.id='glurDailyLedger';panel.className='card';panel.style.marginTop='12px';
+ panel.innerHTML='<summary style="cursor:pointer;font-weight:700">ประวัติยอดสต๊อกตามวันที่ · ยอดยกมา / รับเข้า / ใช้ / ยอดปิด</summary><div class="formgrid" style="margin-top:12px"><div class="field"><label>ตั้งแต่</label><input type="date" id="ledgerFrom"></div><div class="field"><label>ถึง</label><input type="date" id="ledgerTo"></div></div><div class="actions"><button type="button" class="btn" id="ledgerLoad">คำนวณยอดรายวัน</button></div><div id="ledgerResult" class="small" style="overflow-x:auto"></div>';
+ host.appendChild(panel);
+ const today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+ panel.querySelector('#ledgerTo').value=today;panel.querySelector('#ledgerTo').max=today;
+ const start=new Date(Date.now()+7*3600000-6*86400000).toISOString().slice(0,10);
+ panel.querySelector('#ledgerFrom').value=start;panel.querySelector('#ledgerFrom').max=today;
+ panel.querySelector('#ledgerLoad').onclick=async()=>{
+  if(active)return;const from=panel.querySelector('#ledgerFrom').value,to=panel.querySelector('#ledgerTo').value,out=panel.querySelector('#ledgerResult');
+  if(!from||!to||from>to||to>today||(new Date(to)-new Date(from))/86400000>366){out.textContent='เลือกช่วงวันที่ไม่เกิน 366 วัน และไม่เกินวันนี้';return}
+  active=true;out.textContent='กำลังคำนวณ...';
+  try{
+   const {data,error}=await glurSupabase.rpc('glur_daily_stock_reconciliation',{p_shop_id:GLUR_SHOP_ID,p_from:from,p_to:to});if(error)throw error;
+   const rows=(data||[]).filter(x=>Number(x.received_quantity)||Number(x.used_quantity)||Number(x.adjusted_quantity));
+   const fmt=x=>Number(x||0).toLocaleString('th-TH',{maximumFractionDigits:3});
+   const table=document.createElement('table');table.style.cssText='width:100%;min-width:640px;border-collapse:collapse';
+   const header=document.createElement('tr');['วันที่','วัตถุดิบ','ยกมา','รับเข้า','ใช้','ปรับ','ปิด'].forEach(x=>{const th=document.createElement('th');th.textContent=x;th.style.padding='8px 5px';header.appendChild(th)});table.appendChild(header);
+   rows.forEach(x=>{const tr=document.createElement('tr');[x.business_date,x.stock_name+' ('+x.unit+')',fmt(x.opening_quantity),fmt(x.received_quantity),fmt(x.used_quantity),fmt(x.adjusted_quantity),fmt(x.closing_quantity)].forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;td.style.cssText='padding:7px 5px;border-top:1px solid var(--line);'+(i===3?'color:var(--green);':i===4?'color:var(--red);':'');tr.appendChild(td)});table.appendChild(tr)});
+   out.replaceChildren();if(!rows.length)out.textContent='ไม่มีรายการเคลื่อนไหวในช่วงนี้';else out.appendChild(table);
+  }catch(e){out.textContent='อ่านรายงานไม่ได้: '+(e.message||e)}
+  finally{active=false}
+ };
+}
+const prior=renderStock;renderStock=function(){prior();install()};
+if(typeof page!=='undefined'&&page==='stock')install();
+})();
+</script>
 </body>
 </html>
 
