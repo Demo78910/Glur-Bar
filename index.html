@@ -2423,67 +2423,82 @@ async function glurTestFinanceExport(kind){
  ctx.textAlign='right';ctx.font='20px sans-serif';ctx.fillStyle='#cccccc';ctx.fillText('ต้น '+fmtQty(x.opening),700,y);ctx.fillStyle='#ff7070';ctx.fillText('−'+fmtQty(x.used),805,y);ctx.fillStyle='#55d58a';ctx.fillText('+'+fmtQty(x.added),895,y);ctx.fillStyle='#ffffff';ctx.fillText('เหลือ '+fmtQty(x.ending)+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
  y=glurFinDrawNonstock(ctx,dailyNonstock,y,rowHeight);
  ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ยอดคำนวณย้อนหลัง รวมยอดยกมาจำลอง (ไม่ใช่รับเข้าจริง) · ไม่กระทบสต๊อกปัจจุบัน · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
- // One image, full-width readable stock rows rather than tiny two-column text.
+ // Single shareable PNG, with two clearly separated inventory columns.
  const reportMode=reportShop===GLUR_TEST_SHOP_ID?'TEST':'LIVE';
- const report=document.createElement('canvas');report.width=1600;
+ const report=document.createElement('canvas');report.width=1800;
  const overviewHeight=Math.max(470,stockTop-105);
- const overviewBottom=Math.ceil(overviewHeight*1600/1080);
- const inventoryTop=overviewBottom+115;
- const rowStep=67,categoryStep=69;
+ const overviewBottom=Math.ceil(overviewHeight*1800/1080);
+ const inventoryTop=overviewBottom+110;
+ const rowStep=62,categoryStep=64,columnX=[48,920],columnWidth=830;
  const groups=[];let group=null;
  for(const item of stockDailyRows){
   const cat=glurFinStockCategory(item.stock_name);
   if(!group||group.name!==cat){group={name:cat,items:[]};groups.push(group);}
   group.items.push(item);
  }
- const stockHeight=groups.reduce((n,g)=>n+categoryStep+g.items.length*rowStep+25,0);
- const nonstockHeight=dailyNonstock.length?115+dailyNonstock.length*rowStep:0;
- report.height=inventoryTop+stockHeight+nonstockHeight+125;
- const pc=report.getContext('2d');
- pc.fillStyle='#171717';pc.fillRect(0,0,report.width,report.height);
- pc.drawImage(canvas,0,0,1080,overviewHeight,0,0,1600,overviewBottom);
- pc.fillStyle='#ff913d';pc.font='bold 42px sans-serif';
- pc.fillText('สต๊อกทั้งหมด '+stockDailyRows.length+' รายการ',55,inventoryTop-45);
- pc.fillStyle='#aaa';pc.font='27px sans-serif';
- pc.fillStyle='#242424';pc.fillRect(42,inventoryTop-33,1515,54);
- pc.fillStyle='#ddd';pc.font='bold 25px sans-serif';
- pc.fillText('ชื่อวัตถุดิบ',60,inventoryTop+2);
- pc.textAlign='right';
- for(const [label,x] of [['ต้นวัน',1020],['ใช้ไป',1180],['รับเข้า',1320],['คงเหลือ',1550]])pc.fillText(label,x,inventoryTop+2);
- pc.textAlign='left';
+ // Keep categories intact when possible, balancing the heights of both columns.
+ const columns=[[],[]],heights=[0,0];
+ for(const g of groups){
+  const col=heights[0]<=heights[1]?0:1;
+  columns[col].push(g);heights[col]+=categoryStep+g.items.length*rowStep+18;
+ }
+ const inventoryHeight=Math.max(...heights)+95;
+ const nonstockHeight=dailyNonstock.length?110+dailyNonstock.length*rowStep:0;
+ report.height=inventoryTop+inventoryHeight+nonstockHeight+105;
+ const pc=report.getContext('2d');pc.fillStyle='#171717';pc.fillRect(0,0,report.width,report.height);
+ pc.drawImage(canvas,0,0,1080,overviewHeight,0,0,1800,overviewBottom);
+ pc.fillStyle='#ff913d';pc.font='bold 43px sans-serif';
+ pc.fillText('สต๊อกทั้งหมด '+stockDailyRows.length+' รายการ · แยกตามหมวดหมู่',48,inventoryTop-42);
  const qty=v=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:2});
- let yy=inventoryTop+38,number=0;
- for(const group of groups){
-  pc.fillStyle='#34302a';pc.fillRect(42,yy-38,1515,61);
-  pc.fillStyle='#ff913d';pc.fillRect(42,yy-38,7,61);
-  pc.font='bold 31px sans-serif';pc.fillText('หมวด '+group.name,65,yy,1440);yy+=categoryStep;
-  for(const item of group.items){
-   number++;
-   if(number%2===0){pc.fillStyle='#252525';pc.fillRect(42,yy-39,1515,61);}
-   pc.strokeStyle='#3e3e3e';pc.lineWidth=1.5;pc.beginPath();pc.moveTo(42,yy+27);pc.lineTo(1557,yy+27);pc.stroke();
-   pc.strokeStyle='#454545';pc.lineWidth=1;for(const sx of [795,1035,1195,1335]){pc.beginPath();pc.moveTo(sx,yy-39);pc.lineTo(sx,yy+27);pc.stroke();}
-   pc.fillStyle='#fff';pc.font='30px sans-serif';
-   pc.fillText(number+'. '+item.stock_name,60,yy,720);
-   pc.textAlign='right';pc.font='27px sans-serif';
-   pc.fillStyle='#c6c6c6';pc.fillText('ต้น '+qty(item.opening),1020,yy,190);
-   pc.fillStyle=Number(item.used)?'#ff7070':'#777';pc.fillText(Number(item.used)?'−'+qty(item.used):'—',1180,yy,135);
-   pc.fillStyle=Number(item.added)?'#55d58a':'#777';pc.fillText(Number(item.added)?'+'+qty(item.added):'—',1320,yy,125);
-   pc.fillStyle='#fff';pc.fillText(qty(item.ending)+' '+item.unit,1550,yy,215);
-   pc.textAlign='left';yy+=rowStep;
+ // Strong center separator keeps left and right columns visually distinct.
+ pc.fillStyle='#ff913d';pc.fillRect(892,inventoryTop-10,3,inventoryHeight+15);
+ for(let col=0;col<2;col++){
+  const x=columnX[col],w=columnWidth;
+  pc.fillStyle='#292929';pc.fillRect(x,inventoryTop, w,56);
+  pc.fillStyle='#ddd';pc.font='bold 23px sans-serif';
+  pc.fillText('วัตถุดิบ',x+12,inventoryTop+36);
+  pc.textAlign='right';
+  for(const [label,offset] of [['ต้น',505],['ใช้',593],['รับ',670],['เหลือ',815]])pc.fillText(label,x+offset,inventoryTop+36);
+  pc.textAlign='left';
+  let yy=inventoryTop+100;
+  for(const g of columns[col]){
+   pc.fillStyle='#393026';pc.fillRect(x,yy-40,w,54);
+   pc.fillStyle='#ff913d';pc.fillRect(x,yy-40,6,54);
+   pc.font='bold 25px sans-serif';pc.fillText('หมวด '+g.name,x+15,yy-4,w-30);
+   yy+=categoryStep;
+   for(const item of g.items){
+    const number=stockDailyRows.indexOf(item)+1;
+    if(number%2===0){pc.fillStyle='#252525';pc.fillRect(x,yy-39,w,58);}
+    pc.strokeStyle='#414141';pc.lineWidth=1;
+    pc.beginPath();pc.moveTo(x,yy+20);pc.lineTo(x+w,yy+20);pc.stroke();
+    for(const offset of [405,517,604,682]){
+     pc.beginPath();pc.moveTo(x+offset,yy-39);pc.lineTo(x+offset,yy+20);pc.stroke();
+    }
+    pc.fillStyle='#fff';pc.font='23px sans-serif';
+    pc.fillText(number+'. '+item.stock_name,x+12,yy,380);
+    pc.textAlign='right';pc.font='22px sans-serif';
+    pc.fillStyle='#bbb';pc.fillText(qty(item.opening),x+505,yy,92);
+    pc.fillStyle=Number(item.used)?'#ff7070':'#777';pc.fillText(Number(item.used)?'−'+qty(item.used):'—',x+593,yy,75);
+    pc.fillStyle=Number(item.added)?'#55d58a':'#777';pc.fillText(Number(item.added)?'+'+qty(item.added):'—',x+670,yy,65);
+    pc.fillStyle='#fff';pc.fillText(qty(item.ending)+' '+item.unit,x+815,yy,126);
+    pc.textAlign='left';yy+=rowStep;
+   }
+   pc.strokeStyle='#ff913d';pc.lineWidth=2;pc.beginPath();pc.moveTo(x,yy-12);pc.lineTo(x+w,yy-12);pc.stroke();
+   yy+=18;
   }
-  pc.strokeStyle='#ff913d';pc.lineWidth=2;pc.beginPath();pc.moveTo(42,yy-13);pc.lineTo(1557,yy-13);pc.stroke();
-  yy+=25;
  }
  if(dailyNonstock.length){
-  yy+=25;pc.fillStyle='#ff913d';pc.font='bold 33px sans-serif';
-  pc.fillText('ส่วนผสมไม่ตัดสต๊อกที่ใช้วันนี้ ('+dailyNonstock.length+' รายการ)',55,yy);yy+=75;
+  let yy=inventoryTop+inventoryHeight+20;
+  pc.fillStyle='#ff913d';pc.font='bold 30px sans-serif';
+  pc.fillText('ส่วนผสมไม่ตัดสต๊อกที่ใช้วันนี้ ('+dailyNonstock.length+' รายการ)',48,yy);yy+=64;
   for(const item of dailyNonstock){
-   pc.fillStyle='#fff';pc.font='29px sans-serif';pc.fillText(item.name,65,yy,1050);
-   pc.fillStyle='#ff7070';pc.textAlign='right';pc.fillText('−'+qty(item.quantity_used)+' '+item.unit,1540,yy);pc.textAlign='left';yy+=rowStep;
+   pc.fillStyle='#fff';pc.font='25px sans-serif';pc.fillText(item.name,60,yy,1300);
+   pc.fillStyle='#ff7070';pc.textAlign='right';pc.fillText('−'+qty(item.quantity_used)+' '+item.unit,1740,yy);
+   pc.textAlign='left';yy+=rowStep;
   }
  }
  pc.fillStyle='#aaa';pc.font='23px sans-serif';
- pc.fillText('GLUR BAR · '+reportMode+' · '+day+' · ภาพเดียว · สต๊อกย้อนหลังเป็นยอดคำนวณ ไม่กระทบยอดปัจจุบัน',55,report.height-45,1490);
+ pc.fillText('GLUR BAR · '+reportMode+' · '+day+' · รายงานภาพเดียว · ยอดสต๊อกย้อนหลังเป็นยอดคำนวณ',48,report.height-38,1700);
  const blob=await new Promise(resolve=>report.toBlob(resolve,'image/png'));
  if(!blob)throw Error('สร้างภาพรายวันไม่สำเร็จ');
  const url=URL.createObjectURL(blob),link=document.createElement('a');
