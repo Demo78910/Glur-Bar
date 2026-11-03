@@ -3139,6 +3139,30 @@ function renderGlurBackdatedSales(){
  const previousSet=setPage;setPage=function(p){if(p==='backdated-sales'&&!glurIsDeveloper()){toast('บัญชีนี้ไม่มีสิทธิ์บันทึกยอดขาย');return}previousSet(p);if(p==='backdated-sales')Promise.all([loadCloudStock(),loadCloudRecipes(),glurLoadBackdatedSales()]).then(()=>{if(page===p)renderGlurBackdatedSales()})};
 })();
 
+
+/* Developer-only TEST historical import; all writes use authenticated, server-validated RPCs. */
+let glurHistoricalImportBusy=false;
+const glurOriginalBackdatedRender=renderGlurBackdatedSales;
+renderGlurBackdatedSales=function(){
+ glurOriginalBackdatedRender();
+ if(GLUR_SHOP_ID!=='e15ec9b2-3c5a-48a0-a927-cdb0c2a8d6af'||!glurIsDeveloper())return;
+ const host=document.querySelector('.backdated-ui');if(!host)return;
+ const panel=document.createElement('section');panel.className='card';panel.style.marginBottom='14px';
+ panel.innerHTML='<div class="section-title">นำเข้ายอดขายย้อนหลัง TEST · 27 ต.ค.–2 พ.ย. 2026</div><p class="small muted">รายการ 34 บรรทัด รวม Custom Cocktail 4 แก้วตามส่วนผสมจริง · ระบบบันทึกทีละรายการ ตรวจสิทธิ์และสต๊อกทุกครั้ง · ไม่กระทบ LIVE</p><div id="glurHistoricalImportSummary" class="small muted">กดตรวจสอบเพื่อดูรายการค้างบันทึก</div><div class="actions"><button type="button" class="btn secondary smallbtn" id="glurHistoricalInspect">ตรวจสอบรายการ</button><button type="button" class="btn smallbtn" id="glurHistoricalPost" disabled>ยืนยันบันทึกยอดขายที่ค้าง</button></div><div id="glurHistoricalImportLog" class="small" style="white-space:pre-wrap;max-height:220px;overflow:auto"></div>';
+ host.prepend(panel);
+ let rows=[];
+ const inspect=async()=>{const {data,error}=await glurSupabase.rpc('glur_list_staged_historical_sales');if(error){panel.querySelector('#glurHistoricalImportSummary').textContent='ตรวจสอบไม่ได้: '+error.message;return}rows=Array.isArray(data)?data:[];const pending=rows.filter(x=>x.status==='staged');const posted=rows.filter(x=>x.status==='posted');const total=pending.reduce((a,x)=>a+Number(x.unit_price)*Number(x.quantity),0);panel.querySelector('#glurHistoricalImportSummary').textContent='ค้าง '+pending.length+' รายการ · '+pending.reduce((a,x)=>a+Number(x.quantity),0)+' หน่วย · '+money(total)+' | บันทึกแล้ว '+posted.length+' รายการ';panel.querySelector('#glurHistoricalPost').disabled=!pending.length||glurHistoricalImportBusy;};
+ panel.querySelector('#glurHistoricalInspect').onclick=inspect;
+ panel.querySelector('#glurHistoricalPost').onclick=async()=>{
+  if(glurHistoricalImportBusy)return;
+  const pending=rows.filter(x=>x.status==='staged');if(!pending.length)return;
+  if(!confirm('ยืนยันบันทึกยอดขายย้อนหลัง TEST '+pending.length+' รายการ?\\nระบบจะตัดสต๊อกจริงและบันทึกวันที่ตามประวัติ โดยไม่แก้ LIVE'))return;
+  glurHistoricalImportBusy=true;panel.querySelector('#glurHistoricalPost').disabled=true;
+  const log=panel.querySelector('#glurHistoricalImportLog');let success=0;
+  for(const line of pending){const {error}=await glurSupabase.rpc('glur_post_staged_historical_sale',{p_line_id:line.id});if(error){log.textContent+='\\nหยุดที่ '+line.business_date+' '+line.recipe_name+': '+error.message;break}success++;log.textContent+='\\n✓ '+line.business_date+' '+line.recipe_name+' × '+line.quantity;log.scrollTop=log.scrollHeight;}
+  glurHistoricalImportBusy=false;log.textContent+='\\nบันทึกเพิ่ม '+success+' รายการ ตรวจสอบยอดค้างก่อนลองต่อ';await inspect();await Promise.all([loadCloudStock(),loadGlurSales(),glurLoadBackdatedSales(),glurLoadFinance()]);};
+ inspect();
+};
 </script>
 <style>
 .backdated-ui{max-width:680px;margin:0 auto}.backdated-lead{color:var(--muted);font-size:12px;margin:0 0 12px}.backdated-entry{padding:15px}.backdated-pair{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(80px,.7fr);gap:10px}.backdated-ui .stack{gap:12px}.backdated-ui label{font-size:12px;color:#d6c6ba}.backdated-ui input,.backdated-ui select,.backdated-ui textarea{width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-size:16px;padding:10px 11px;min-height:44px}.backdated-ui input[type=date]{display:block;appearance:none;-webkit-appearance:none;min-inline-size:0}.backdated-ui input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}.backdated-ui textarea{resize:vertical;min-height:70px;line-height:1.4}.backdated-ui #glurBackdatedSearch{font-size:14px;min-height:40px;padding:8px 11px}.backdated-summary{padding:12px;background:#241c17;border:1px solid #62432f;border-radius:10px;font-size:13px}.backdated-total{display:flex;align-items:center;justify-content:space-between;gap:10px}.backdated-total strong{color:var(--gold2);font-size:23px}.backdated-summary details{margin-top:6px}.backdated-summary summary{color:#c8b4a5;font-size:11px;cursor:pointer}.backdated-summary p{font-size:12px;margin:6px 0 0}.backdated-footnote{font-size:11px;color:var(--muted);text-align:center}.backdated-help{font-size:12px;color:var(--muted);margin:0 3px 15px}.backdated-help summary{cursor:pointer;padding:6px 0}.backdated-help p{margin:5px 0;line-height:1.6}.backdated-history{padding:13px 15px}.backdated-history>summary{cursor:pointer;font-size:14px;font-weight:650}.backdated-history .pill{margin-left:7px}.backdated-history-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}.backdated-history .item{align-items:flex-start}.backdated-history .item>strong{white-space:nowrap}
