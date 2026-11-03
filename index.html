@@ -1287,7 +1287,7 @@ async function loadGlurSales(){
 }
 function glurSaleDate(v){try{return new Date(v).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'})}catch(e){return '—'}}
 // Custom Cocktail — quantities and prices are selected per sale, never written to a permanent recipe.
-let glurCustomOpen=false,glurCustomBusy=false,glurCustomRows=[{stock_id:'',quantity:'30'}],glurCustomName='Custom Cocktail',glurCustomPrice='',glurCustomQty='1',glurCustomNote='';
+let glurCustomOpen=false,glurCustomBusy=false,glurCustomRows=[{stock_id:'',quantity:'30'}],glurCustomName='Custom Cocktail',glurCustomPrice='320',glurCustomQty='1',glurCustomNote='';
 function glurCustomPart(id){
  if(String(id).startsWith('ns:')){const c=glurCostCatalog.find(x=>x.id===id.slice(3));if(!c)return null;const price=glurEffectiveCost(c);return {...c,isNonstock:true,cost_per_unit:price&&price.purchase_price!==null?num(price.purchase_price)/num(price.package_size):0,priceKnown:!!price&&price.purchase_price!==null};}
  return cloudStock.find(s=>s.id===id);
@@ -1319,7 +1319,7 @@ function glurRenderCustomCocktail(){
   if(shortages.length){toast('สต๊อกไม่พอ: '+shortages.join(', '));return}
   if(!confirm(`ขาย ${name} × ${qty} แก้ว\nยอดรวม ${money(price*qty)}\nตัดสต๊อก ${items.length} ชนิด · ไม่ตัดสต๊อก ${extras.length} ชนิด\n\nยืนยันตัดสต๊อก?`))return;
   glurCustomBusy=true;glurRenderCustomCocktail();
-  try{const {error}=await glurSupabase.rpc('glur_record_custom_cocktail_v2',{p_shop_id:GLUR_SHOP_ID,p_name:name,p_unit_price:price,p_quantity:qty,p_ingredients:items,p_nonstock:extras,p_note:glurCustomNote.trim()||null});if(error)throw error;toast('บันทึก Custom Cocktail สำเร็จ');glurCustomRows=[{stock_id:'',quantity:'30'}];glurCustomPrice='';glurCustomNote='';glurCustomOpen=false;await Promise.all([loadCloudStock(),loadGlurSales()]);if(page==='sales')renderGlurSales()}catch(err){toast('บันทึกไม่สำเร็จ: '+(err.message||err))}finally{glurCustomBusy=false;glurRenderCustomCocktail()}
+  try{const {error}=await glurSupabase.rpc('glur_record_custom_cocktail_v2',{p_shop_id:GLUR_SHOP_ID,p_name:name,p_unit_price:price,p_quantity:qty,p_ingredients:items,p_nonstock:extras,p_note:glurCustomNote.trim()||null});if(error)throw error;toast('บันทึก Custom Cocktail สำเร็จ');glurCustomRows=[{stock_id:'',quantity:'30'}];glurCustomPrice='320';glurCustomNote='';glurCustomOpen=false;await Promise.all([loadCloudStock(),loadGlurSales()]);if(page==='sales')renderGlurSales()}catch(err){toast('บันทึกไม่สำเร็จ: '+(err.message||err))}finally{glurCustomBusy=false;glurRenderCustomCocktail()}
  };
  preview();
 }
