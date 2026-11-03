@@ -2429,7 +2429,7 @@ async function glurTestFinanceExport(kind){
  const overviewHeight=Math.max(470,stockTop-105);
  const overviewBottom=Math.ceil(overviewHeight*1800/1080);
  const inventoryTop=overviewBottom+110;
- const rowStep=62,categoryStep=64,columnX=[48,920],columnWidth=830;
+ const rowStep=100,categoryStep=67,columnX=[48,920],columnWidth=830;
  const groups=[];let group=null;
  for(const item of stockDailyRows){
   const cat=glurFinStockCategory(item.stock_name);
@@ -2454,11 +2454,9 @@ async function glurTestFinanceExport(kind){
  pc.fillStyle='#ff913d';pc.fillRect(892,inventoryTop-10,3,inventoryHeight+15);
  for(let col=0;col<2;col++){
   const x=columnX[col],w=columnWidth;
-  pc.fillStyle='#292929';pc.fillRect(x,inventoryTop, w,56);
+  pc.fillStyle='#292929';pc.fillRect(x,inventoryTop,w,56);
   pc.fillStyle='#ddd';pc.font='bold 23px sans-serif';
-  pc.fillText('วัตถุดิบ',x+12,inventoryTop+36);
-  pc.textAlign='right';
-  for(const [label,offset] of [['ต้น',505],['ใช้',593],['รับ',670],['เหลือ',815]])pc.fillText(label,x+offset,inventoryTop+36);
+  pc.fillText('วัตถุดิบ · ชื่อด้านบน / ตัวเลขด้านล่าง',x+12,inventoryTop+36);
   pc.textAlign='left';
   let yy=inventoryTop+100;
   for(const g of columns[col]){
@@ -2468,20 +2466,27 @@ async function glurTestFinanceExport(kind){
    yy+=categoryStep;
    for(const item of g.items){
     const number=stockDailyRows.indexOf(item)+1;
-    if(number%2===0){pc.fillStyle='#252525';pc.fillRect(x,yy-39,w,58);}
-    pc.strokeStyle='#414141';pc.lineWidth=1;
-    pc.beginPath();pc.moveTo(x,yy+20);pc.lineTo(x+w,yy+20);pc.stroke();
-    for(const offset of [405,517,604,682]){
-     pc.beginPath();pc.moveTo(x+offset,yy-39);pc.lineTo(x+offset,yy+20);pc.stroke();
+    if(number%2===0){pc.fillStyle='#252525';pc.fillRect(x,yy-38,w,94);}
+    pc.strokeStyle='#454545';pc.lineWidth=1.5;
+    pc.beginPath();pc.moveTo(x,yy+57);pc.lineTo(x+w,yy+57);pc.stroke();
+    pc.fillStyle='#fff';pc.font='bold 29px sans-serif';
+    pc.fillText(number+'. '+item.stock_name,x+14,yy-4,w-30);
+    const values=[
+     {label:'ต้น',value:qty(item.opening),color:'#e0e0e0'},
+     {label:'ใช้',value:Number(item.used)?'−'+qty(item.used):'—',color:Number(item.used)?'#ff7777':'#888'},
+     {label:'รับ',value:Number(item.added)?'+'+qty(item.added):'—',color:Number(item.added)?'#5ee5a0':'#888'},
+     {label:'เหลือ',value:qty(item.ending)+' '+item.unit,color:'#fff'}
+    ];
+    const cellWidth=204;
+    for(let k=0;k<4;k++){
+     const cx=x+8+k*cellWidth;
+     if(k){pc.strokeStyle='#494949';pc.beginPath();pc.moveTo(cx,yy+1);pc.lineTo(cx,yy+55);pc.stroke();}
+     pc.fillStyle='#aaa';pc.font='19px sans-serif';pc.fillText(values[k].label,cx+8,yy+22);
+     pc.fillStyle=values[k].color;pc.font='bold 27px sans-serif';
+     pc.textAlign='right';pc.fillText(values[k].value,cx+cellWidth-7,yy+46,cellWidth-14);
+     pc.textAlign='left';
     }
-    pc.fillStyle='#fff';pc.font='23px sans-serif';
-    pc.fillText(number+'. '+item.stock_name,x+12,yy,380);
-    pc.textAlign='right';pc.font='22px sans-serif';
-    pc.fillStyle='#bbb';pc.fillText(qty(item.opening),x+505,yy,92);
-    pc.fillStyle=Number(item.used)?'#ff7070':'#777';pc.fillText(Number(item.used)?'−'+qty(item.used):'—',x+593,yy,75);
-    pc.fillStyle=Number(item.added)?'#55d58a':'#777';pc.fillText(Number(item.added)?'+'+qty(item.added):'—',x+670,yy,65);
-    pc.fillStyle='#fff';pc.fillText(qty(item.ending)+' '+item.unit,x+815,yy,126);
-    pc.textAlign='left';yy+=rowStep;
+    yy+=rowStep;
    }
    pc.strokeStyle='#ff913d';pc.lineWidth=2;pc.beginPath();pc.moveTo(x,yy-12);pc.lineTo(x+w,yy-12);pc.stroke();
    yy+=18;
