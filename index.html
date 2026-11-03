@@ -2210,7 +2210,7 @@ async function glurFinDailyFlows(day,dayClosings,daySales){
  if(entSales.length){const st=stocks.find(x=>x.name==='Regency แบน 350 ml');if(st)for(const sale of entSales)add(st.id,-30*Number(sale.quantity_sold),'Regency แก้ว ENT นักดนตรี · '+sale.quantity_sold+' แก้ว');}
  for(const x of receipts){covered.add(x.id);add(x.stock_id,x.quantity,'รับเข้า / เบิกเข้าบาร์')}
  for(const x of batches){covered.add(x.id);const recipe=recipeMap.get(x.recipe_id);if(!recipe)throw Error('ไม่พบสูตร Batch ในประวัติ');add(recipe.output_stock_id,x.produced_qty,'ผลผลิต Batch');const inputs=await all(()=>glurSupabase.from('glur_prebatch_batch_inputs').select('stock_id,quantity_used').eq('batch_id',x.id).order('stock_id'));for(const input of inputs)add(input.stock_id,-Number(input.quantity_used),'ใช้ผลิต Batch')}
- for(const x of movements){if(x.movement_type==='sale'||covered.has(x.reference_id))continue;add(x.stock_id,x.quantity_change,'ปรับ / ใช้ / ของเสีย')}
+ for(const x of movements){if(x.movement_type==='sale'||covered.has(x.reference_id))continue;if(entSales.length&&String(x.reason||'').startsWith('Regency แก้ว ENT นักดนตรี'))continue;add(x.stock_id,x.quantity_change,'ปรับ / ใช้ / ของเสีย')}
  return Array.from(rows.values()).map(r=>({...r,reasons:Array.from(r.reasons).join(' · ')})).sort((a,b)=>a.name.localeCompare(b.name,'th'));
 }
 function glurFinFlowHTML(rows){
