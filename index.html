@@ -3141,7 +3141,7 @@ function renderGlurBackdatedSales(){
 
 
 /* Developer-only TEST historical import; all writes use authenticated, server-validated RPCs. */
-let glurHistoricalImportBusy=false;
+let glurHistoricalImportBusy=false; // TEST import state
 const glurOriginalBackdatedRender=renderGlurBackdatedSales;
 renderGlurBackdatedSales=function(){
  glurOriginalBackdatedRender();
