@@ -2423,8 +2423,42 @@ async function glurTestFinanceExport(kind){
  ctx.textAlign='right';ctx.font='20px sans-serif';ctx.fillStyle='#cccccc';ctx.fillText('ต้น '+fmtQty(x.opening),700,y);ctx.fillStyle='#ff7070';ctx.fillText('−'+fmtQty(x.used),805,y);ctx.fillStyle='#55d58a';ctx.fillText('+'+fmtQty(x.added),895,y);ctx.fillStyle='#ffffff';ctx.fillText('เหลือ '+fmtQty(x.ending)+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
  y=glurFinDrawNonstock(ctx,dailyNonstock,y,rowHeight);
  ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ยอดคำนวณย้อนหลัง รวมยอดยกมาจำลอง (ไม่ใช่รับเข้าจริง) · ไม่กระทบสต๊อกปัจจุบัน · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
- const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('สร้างภาพไม่สำเร็จ');
- const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='GLUR_'+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE')+'_Daily_'+day+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);
+ // Paginated mobile preview: all 60 stock rows remain present, but no single giant PNG.
+ const pages=[],reportMode=reportShop===GLUR_TEST_SHOP_ID?'TEST':'LIVE';
+ const pageHeader=116,pageFooter=58,maxContent=1430;
+ const sectionBreak=Math.max(450,Math.min(canvas.height,stockTop-30));
+ const ranges=[];
+ // Keep the overview separate from the complete inventory table.
+ for(const [start,end] of [[0,sectionBreak],[sectionBreak,canvas.height]]){
+  for(let top=start;top<end;top+=maxContent){
+   ranges.push([top,Math.min(end,top+maxContent)]);
+  }
+ }
+ for(let i=0;i<ranges.length;i++){
+  const [top,bottom]=ranges[i],piece=document.createElement('canvas');
+  piece.width=1080;piece.height=pageHeader+(bottom-top)+pageFooter;
+  const pc=piece.getContext('2d');pc.fillStyle='#171717';pc.fillRect(0,0,piece.width,piece.height);
+  pc.fillStyle='#ff913d';pc.font='bold 34px sans-serif';pc.fillText('GLUR BAR · '+reportMode,45,48);
+  pc.fillStyle='#ddd';pc.font='23px sans-serif';pc.fillText('ปิดยอด '+day+' · '+(i===0?'สรุปประจำวัน':'รายละเอียดสต๊อกทั้งหมด'),45,86);
+  pc.textAlign='right';pc.fillText('หน้า '+(i+1)+' / '+ranges.length,1035,48);pc.textAlign='left';
+  pc.drawImage(canvas,0,top,1080,bottom-top,0,pageHeader,1080,bottom-top);
+  pc.fillStyle='#aaa';pc.font='19px sans-serif';
+  pc.fillText('GLUR BAR · '+reportMode+' · '+day+' · หน้า '+(i+1)+'/'+ranges.length,45,piece.height-19);
+  const blob=await new Promise(resolve=>piece.toBlob(resolve,'image/png'));
+  if(!blob)throw Error('สร้างภาพรายงานหน้า '+(i+1)+' ไม่สำเร็จ');
+  pages.push({url:URL.createObjectURL(blob),name:'GLUR_'+reportMode+'_Daily_'+day+'_Page_'+String(i+1).padStart(2,'0')+'.png'});
+ }
+ const previous=document.getElementById('glurPagedReportPreview');if(previous)previous.remove();
+ const overlay=document.createElement('div');overlay.id='glurPagedReportPreview';
+ overlay.style.cssText='position:fixed;inset:0;z-index:99999;background:#101010;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom);color:#fff';
+ overlay.innerHTML='<div style="display:flex;align-items:center;gap:9px;padding:12px 0;flex-wrap:wrap"><strong style="flex:1;color:#ff913d">รายงาน '+day+'</strong><span id="glurPageCount"></span><button id="glurPageClose" type="button" class="btn secondary">ปิด</button></div><div style="flex:1;min-height:0;overflow:auto;text-align:center"><img id="glurPageImage" alt="รายงานปิดยอด" style="width:100%;max-width:680px;height:auto"></div><div style="display:flex;gap:8px;padding:10px 0"><button type="button" class="btn secondary" id="glurPagePrev" style="flex:1">ก่อนหน้า</button><a id="glurPageSave" class="btn" style="flex:2;text-align:center" download>บันทึกภาพหน้านี้</a><button type="button" class="btn secondary" id="glurPageNext" style="flex:1">ถัดไป</button></div>';
+ document.body.appendChild(overlay);
+ let pageIndex=0;
+ const showPage=()=>{document.getElementById('glurPageImage').src=pages[pageIndex].url;document.getElementById('glurPageSave').href=pages[pageIndex].url;document.getElementById('glurPageSave').download=pages[pageIndex].name;document.getElementById('glurPageCount').textContent=(pageIndex+1)+' / '+pages.length;document.getElementById('glurPagePrev').disabled=pageIndex===0;document.getElementById('glurPageNext').disabled=pageIndex===pages.length-1;};
+ document.getElementById('glurPagePrev').onclick=()=>{if(pageIndex>0){pageIndex--;showPage();}};
+ document.getElementById('glurPageNext').onclick=()=>{if(pageIndex<pages.length-1){pageIndex++;showPage();}};
+ document.getElementById('glurPageClose').onclick=()=>{overlay.remove();pages.forEach(p=>URL.revokeObjectURL(p.url));};
+ showPage();
 }
 
 function renderGlurClosingReport(){
