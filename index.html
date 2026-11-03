@@ -3523,9 +3523,11 @@ function install(){
   finally{busy=false;btn.disabled=false}
  });
 }
-const original=renderStock;
-renderStock=function(){original();install()};
-if(typeof page!=='undefined'&&page==='stock')install();
+if(typeof renderStock==='function'){
+ const original=renderStock;
+ renderStock=function(){original();install()};
+ if(typeof page!=='undefined'&&page==='stock')install();
+}
 })();
 </script>
 
@@ -3558,8 +3560,11 @@ function install(){
   finally{active=false}
  };
 }
-const prior=renderStock;renderStock=function(){prior();install()};
-if(typeof page!=='undefined'&&page==='stock')install();
+if(typeof renderStock==='function'){
+ const prior=renderStock;
+ renderStock=function(){prior();install()};
+ if(typeof page!=='undefined'&&page==='stock')install();
+}
 })();
 </script>
 </body>
