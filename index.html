@@ -2198,7 +2198,7 @@ async function glurFinDailyFlows(day,dayClosings,daySales){
   all(()=>glurSupabase.from('glur_stock').select('id,name,unit').eq('shop_id',shop).order('id')),
   all(()=>glurSupabase.from('glur_stock_receipts').select('id,stock_id,quantity,received_at,created_at').eq('shop_id',shop).gte('received_at',start).lt('received_at',end).order('id')),
   all(()=>glurSupabase.from('glur_prebatch_batches').select('id,recipe_id,produced_qty,produced_at').eq('shop_id',shop).gte('produced_at',start).lt('produced_at',end).order('id')),
-  all(()=>glurSupabase.from('glur_stock_movements').select('id,stock_id,quantity_change,movement_type,reference_id,created_at').eq('shop_id',shop).gte('created_at',start).lt('created_at',end).order('id')),
+  all(()=>glurSupabase.from('glur_stock_movements').select('id,stock_id,quantity_change,movement_type,reference_id,created_at,reason').eq('shop_id',shop).gte('created_at',start).lt('created_at',end).order('id')),
   all(()=>glurSupabase.from('glur_prebatch_recipes').select('id,output_stock_id').eq('shop_id',shop).order('id'))
  ]);
  if(GLUR_SHOP_ID!==shop)throw Error('โหมดเปลี่ยนระหว่างโหลดรายงาน กรุณาโหลดใหม่');
