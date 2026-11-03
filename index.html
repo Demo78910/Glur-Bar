@@ -2382,7 +2382,7 @@ async function glurTestFinanceExport(kind){
   allHistorical(()=>glurSupabase.from('glur_stock_receipts').select('id,stock_id,quantity,received_at').eq('shop_id',reportShop).order('id')),
   allHistorical(()=>glurSupabase.from('glur_prebatch_batches').select('id,recipe_id,produced_qty,produced_at').eq('shop_id',reportShop).order('id')),
   allHistorical(()=>glurSupabase.from('glur_prebatch_recipes').select('id,output_stock_id').eq('shop_id',reportShop).order('id')),
-  allHistorical(()=>glurSupabase.from('glur_stock_movements').select('id,stock_id,quantity_change,movement_type,reference_id,created_at').eq('shop_id',reportShop).order('id')),
+  allHistorical(()=>glurSupabase.from('glur_stock_movements').select('id,stock_id,quantity_change,movement_type,reference_id,created_at,reason').eq('shop_id',reportShop).order('id')),
   allHistorical(()=>glurSupabase.from('glur_sales').select('id,sold_at,is_backdated,backdated_business_date').eq('shop_id',reportShop).order('id'))
  ]);
  if(GLUR_SHOP_ID!==reportShop)throw Error('โหมดเปลี่ยนระหว่างโหลดรายงาน');
@@ -2410,6 +2410,11 @@ async function glurTestFinanceExport(kind){
  if(GLUR_SHOP_ID!==reportShop)throw Error('โหมดเปลี่ยนระหว่างโหลดรายงาน');
  const ledgerById=new Map((ledgerRows||[]).map(x=>[String(x.stock_id),x]));
  const stockDailyRows=sortedItems.map(x=>{const ledger=ledgerById.get(String(x.stock_id));if(!ledger)throw Error('ไม่พบยอดสต๊อกย้อนหลังของ '+x.stock_name);return {...x,opening:Number(ledger.opening_quantity),used:Number(ledger.used_quantity),added:Number(ledger.received_quantity)+Math.max(0,Number(ledger.adjusted_quantity)),ending:Number(ledger.closing_quantity)};});
+ // Historical ENT musician pours are stock movements, not paid sales. Show them without deducting stock again.
+ const entMovements=allMovements.filter(x=>String(x.reason||'').startsWith('Regency แก้ว ENT นักดนตรี') && businessDayOf(x.created_at)===day && Number(x.quantity_change)<0);
+ const entMl=entMovements.reduce((sum,x)=>sum+Math.abs(Number(x.quantity_change)),0);
+ const entQty=entMovements.reduce((sum,x)=>sum+Math.abs(Number(x.quantity_change))/30,0);
+ if(entQty>0){const key='Regency แก้ว ENT (นักดนตรี · ฟรี)';const v=menus.get(key)||{qty:0,revenue:0};v.qty+=entQty;menus.set(key,v);}
  const menuLines=Array.from(menus.entries()).sort((a,b)=>b[1].qty-a[1].qty);
  const canvas=document.createElement('canvas');canvas.width=1080;
  const rowHeight=46,menuTop=475,flowTop=menuTop+85+Math.max(1,menuLines.length)*rowHeight,stockTop=flowTop+flowHeight;const categories=Array.from(new Set(sortedItems.map(x=>glurFinStockCategory(x.stock_name))));
@@ -2424,7 +2429,7 @@ async function glurTestFinanceExport(kind){
  const fmt=n=>Number(n||0).toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});
  const stats=[['ยอดขาย','฿'+fmt(sum('revenue'))],['ขายทั้งหมด',fmt(sum('drinks_sold')).replace('.00','')+' แก้ว'],['ต้นทุนขาย','฿'+fmt(sum('cogs'))],['ค่าใช้จ่าย','฿'+fmt(sum('expenses'))],['กำไรหลังค่าใช้จ่าย','฿'+fmt(sum('profit_after_expenses'))]];
  stats.forEach(([label,value],i)=>{const col=i%2,row=Math.floor(i/2),x=65+col*490,y=248+row*62;ctx.fillStyle='#bbbbbb';ctx.font='23px sans-serif';ctx.fillText(label,x,y);ctx.fillStyle=i===4?'#ff913d':'#ffffff';ctx.font='bold 27px sans-serif';ctx.fillText(value,x+210,y)});
- ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('รายการที่ขายทั้งหมด',50,menuTop);
+ ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('รายการขาย / แจกนักดนตรี (ENT ฟรี)',50,menuTop);
  let y=menuTop+52;ctx.font='23px sans-serif';
  if(!menuLines.length){ctx.fillStyle='#bbbbbb';ctx.fillText('ไม่มีรายการขายในรอบนี้',55,y);y+=rowHeight}
  for(const [name,v] of menuLines){ctx.fillStyle='#ffffff';ctx.fillText(name,55,y,650);ctx.textAlign='right';ctx.fillText(v.qty+' แก้ว  /  ฿'+fmt(v.revenue),1020,y);ctx.textAlign='left';y+=rowHeight}
