@@ -2445,14 +2445,23 @@ async function glurTestFinanceExport(kind){
  pc.fillStyle='#ff913d';pc.font='bold 42px sans-serif';
  pc.fillText('สต๊อกทั้งหมด '+stockDailyRows.length+' รายการ',55,inventoryTop-45);
  pc.fillStyle='#aaa';pc.font='27px sans-serif';
- pc.fillText('ต้นวัน     /     ใช้ไป     /     รับเข้า     /     คงเหลือ',55,inventoryTop-6);
+ pc.fillStyle='#242424';pc.fillRect(42,inventoryTop-33,1515,54);
+ pc.fillStyle='#ddd';pc.font='bold 25px sans-serif';
+ pc.fillText('ชื่อวัตถุดิบ',60,inventoryTop+2);
+ pc.textAlign='right';
+ for(const [label,x] of [['ต้นวัน',1020],['ใช้ไป',1180],['รับเข้า',1320],['คงเหลือ',1550]])pc.fillText(label,x,inventoryTop+2);
+ pc.textAlign='left';
  const qty=v=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:2});
  let yy=inventoryTop+38,number=0;
  for(const group of groups){
-  pc.fillStyle='#ff913d';pc.font='bold 31px sans-serif';pc.fillText('หมวด '+group.name,55,yy,1470);yy+=categoryStep;
+  pc.fillStyle='#34302a';pc.fillRect(42,yy-38,1515,61);
+  pc.fillStyle='#ff913d';pc.fillRect(42,yy-38,7,61);
+  pc.font='bold 31px sans-serif';pc.fillText('หมวด '+group.name,65,yy,1440);yy+=categoryStep;
   for(const item of group.items){
    number++;
    if(number%2===0){pc.fillStyle='#252525';pc.fillRect(42,yy-39,1515,61);}
+   pc.strokeStyle='#3e3e3e';pc.lineWidth=1.5;pc.beginPath();pc.moveTo(42,yy+27);pc.lineTo(1557,yy+27);pc.stroke();
+   pc.strokeStyle='#454545';pc.lineWidth=1;for(const sx of [795,1035,1195,1335]){pc.beginPath();pc.moveTo(sx,yy-39);pc.lineTo(sx,yy+27);pc.stroke();}
    pc.fillStyle='#fff';pc.font='30px sans-serif';
    pc.fillText(number+'. '+item.stock_name,60,yy,720);
    pc.textAlign='right';pc.font='27px sans-serif';
@@ -2462,6 +2471,7 @@ async function glurTestFinanceExport(kind){
    pc.fillStyle='#fff';pc.fillText(qty(item.ending)+' '+item.unit,1550,yy,215);
    pc.textAlign='left';yy+=rowStep;
   }
+  pc.strokeStyle='#ff913d';pc.lineWidth=2;pc.beginPath();pc.moveTo(42,yy-13);pc.lineTo(1557,yy-13);pc.stroke();
   yy+=25;
  }
  if(dailyNonstock.length){
