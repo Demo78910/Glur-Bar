@@ -1882,7 +1882,7 @@ function glurRenderResetPanel(){
  const scopes=test?[['test-transactions','เริ่มทดสอบใหม่ · ล้างยอดทดลอง']]:[];
  const scopeLabel=Object.fromEntries(scopes);
  return `<section class="card" style="margin-top:16px;border:1px solid #664b32;border-radius:16px;padding:16px">
- <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><strong style="font-size:19px">จัดการข้อมูล</strong><div class="small muted">เฉพาะผู้พัฒนา · owner001 / owner002</div></div><span style="border:1px solid ${test?'#e9b65b':'#c56a60'};border-radius:18px;padding:5px 11px;font-weight:800">${test?'🧪 TEST':'● LIVE'}</span></div>
+ <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><strong style="font-size:19px">จัดการข้อมูล</strong><div class="small muted">เฉพาะผู้พัฒนา · owner002</div></div><span style="border:1px solid ${test?'#e9b65b':'#c56a60'};border-radius:18px;padding:5px 11px;font-weight:800">${test?'🧪 TEST':'● LIVE'}</span></div>
  <p class="small muted" style="margin:12px 0">${test?'ล้างเฉพาะยอดขาย ค่าใช้จ่าย และการปิดยอด TEST · ไม่ลบสูตรหรือสต๊อก':'ปิดการรีเซตข้อมูล LIVE เพื่อป้องกันข้อมูลจริงเสียหาย'}</p>
  ${test?`<form id="glurResetForm" class="stack" autocomplete="off">
  <div class="field"><label>1. ต้องการล้างอะไร?</label><select name="scope" style="min-height:48px">${scopes.map(([v,l])=>`<option value="${v}" ${test&&v==='test-transactions'?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
@@ -1890,7 +1890,7 @@ function glurRenderResetPanel(){
  <div class="field"><label>2. เหตุผลในการล้าง</label><textarea name="reason" minlength="10" maxlength="1000" rows="2" required placeholder="เช่น เริ่มทดสอบยอดขายใหม่">${test?'เริ่มทดสอบยอดขาย TEST ใหม่':''}</textarea></div>
  <details style="border:1px solid #55453b;border-radius:12px;padding:12px"><summary style="cursor:pointer;font-weight:700">3. ยืนยันตัวตนและดำเนินการ</summary>
  <div class="small muted" style="margin:12px 0">เพื่อป้องกันการลบโดยไม่ตั้งใจ ต้องใช้บัญชีที่กำลังเข้าสู่ระบบอยู่และยืนยันรหัสผ่านอีกครั้ง</div>
- <div class="field"><label>ชื่อบัญชีผู้พัฒนา</label><input name="ownerUsername" type="text" required pattern="[a-z0-9_]{3,30}" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="owner001 หรือ owner002"></div>
+ <div class="field"><label>ชื่อบัญชีผู้พัฒนา</label><input name="ownerUsername" type="text" required pattern="[a-z0-9_]{3,30}" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="owner002"></div>
  <div class="field"><label>รหัสผ่านบัญชี</label><input name="password" type="password" required autocomplete="current-password" placeholder="รหัสผ่านที่ใช้เข้าสู่ระบบ"></div>
  <div class="field"><label>พิมพ์ข้อความยืนยันตามนี้</label><div id="glurResetPhrase" style="font-size:16px;font-weight:800;color:#ffd49a;padding:8px 0">RESET ${test?'TEST SALES':'SALES'}</div><input id="glurResetConfirmation" name="confirmation" type="text" required autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="พิมพ์ข้อความด้านบน" style="min-height:48px"></div>
  <label class="row small" style="align-items:flex-start;gap:9px"><input type="checkbox" name="backup" required style="width:auto;margin-top:3px">ฉันสำรองข้อมูลที่จำเป็นแล้วและเข้าใจว่าการลบย้อนกลับไม่ได้</label>
