@@ -2426,11 +2426,11 @@ async function glurTestFinanceExport(kind){
  // One-share-image layout: readable overview plus complete stock inventory in two columns.
  const reportMode=reportShop===GLUR_TEST_SHOP_ID?'TEST':'LIVE';
  const report=document.createElement('canvas');report.width=1600;
- const overviewHeight=Math.max(470,stockTop-10);
+ const overviewHeight=Math.max(470,stockTop-105); // Crop before the old stock heading to prevent ghost text
  const overviewScale=1600/1080;
  const overviewBottom=Math.ceil(overviewHeight*overviewScale);
  const rowsPerColumn=Math.ceil(stockDailyRows.length/2);
- const inventoryTop=overviewBottom+80;
+ const inventoryTop=overviewBottom+105;
  const rowStep=52,headerStep=62;
  const inventoryHeight=(rowsPerColumn+categories.length+3)*rowStep+130;
  const nonstockHeight=dailyNonstock.length?150+dailyNonstock.length*52:0;
@@ -2451,10 +2451,10 @@ async function glurTestFinanceExport(kind){
    pc.fillStyle='#fff';pc.font='20px sans-serif';
    pc.fillText((col*split+idx+1)+'. '+item.stock_name,x,yy,315);
    pc.font='17px sans-serif';pc.textAlign='right';
-   pc.fillStyle='#aaa';pc.fillText('ต้น '+qty(item.opening),x+423,yy);
-   pc.fillStyle='#ff7070';pc.fillText('−'+qty(item.used),x+507,yy);
-   pc.fillStyle='#55d58a';pc.fillText('+'+qty(item.added),x+588,yy);
-   pc.fillStyle='#fff';pc.fillText('เหลือ '+qty(item.ending),x+735,yy);
+   pc.fillStyle='#aaa';pc.fillText('ต้น '+qty(item.opening),x+423,yy,108);
+   pc.fillStyle='#ff7070';pc.fillText('−'+qty(item.used),x+507,yy,78);
+   pc.fillStyle='#55d58a';pc.fillText('+'+qty(item.added),x+588,yy,78);
+   pc.fillStyle='#fff';pc.fillText('เหลือ '+qty(item.ending)+' '+item.unit,x+735,yy,139);
    pc.textAlign='left';yy+=rowStep;
   }
  }
