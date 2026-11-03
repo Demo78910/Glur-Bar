@@ -2415,7 +2415,7 @@ async function glurTestFinanceExport(kind){
  const entMovements=allMovements.filter(x=>String(x.reason||'').startsWith('Regency แก้ว ENT นักดนตรี') && thaiDay(x.created_at)===day && Number(x.quantity_change)<0);
  const entMl=entMovements.reduce((sum,x)=>sum+Math.abs(Number(x.quantity_change)),0);
  const entQty=entMovements.reduce((sum,x)=>sum+Math.abs(Number(x.quantity_change))/30,0);
- if(entQty>0){const key='Regency แก้ว ENT (นักดนตรี · ฟรี)';const v=menus.get(key)||{qty:0,revenue:0};v.qty+=entQty;menus.set(key,v);}
+ if(entQty>0&&!menus.has('Regency แก้ว')){const key='Regency แก้ว ENT (นักดนตรี · ฟรี)';const v=menus.get(key)||{qty:0,revenue:0};v.qty+=entQty;menus.set(key,v);}
  const regencyStock=sortedItems.find(x=>x.stock_name==='Regency แบน 350 ml');
  const regencyDetails=[];
  if(entMl>0)regencyDetails.push({name:'Regency แก้ว ENT นักดนตรี · '+entQty+' แก้ว',ml:entMl});
