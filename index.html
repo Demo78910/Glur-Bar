@@ -2423,48 +2423,57 @@ async function glurTestFinanceExport(kind){
  ctx.textAlign='right';ctx.font='20px sans-serif';ctx.fillStyle='#cccccc';ctx.fillText('ต้น '+fmtQty(x.opening),700,y);ctx.fillStyle='#ff7070';ctx.fillText('−'+fmtQty(x.used),805,y);ctx.fillStyle='#55d58a';ctx.fillText('+'+fmtQty(x.added),895,y);ctx.fillStyle='#ffffff';ctx.fillText('เหลือ '+fmtQty(x.ending)+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
  y=glurFinDrawNonstock(ctx,dailyNonstock,y,rowHeight);
  ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ยอดคำนวณย้อนหลัง รวมยอดยกมาจำลอง (ไม่ใช่รับเข้าจริง) · ไม่กระทบสต๊อกปัจจุบัน · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
- // One-share-image layout: readable overview plus complete stock inventory in two columns.
+ // One image, full-width readable stock rows rather than tiny two-column text.
  const reportMode=reportShop===GLUR_TEST_SHOP_ID?'TEST':'LIVE';
  const report=document.createElement('canvas');report.width=1600;
- const overviewHeight=Math.max(470,stockTop-105); // Crop before the old stock heading to prevent ghost text
- const overviewScale=1600/1080;
- const overviewBottom=Math.ceil(overviewHeight*overviewScale);
- const rowsPerColumn=Math.ceil(stockDailyRows.length/2);
- const inventoryTop=overviewBottom+105;
- const rowStep=52,headerStep=62;
- const inventoryHeight=(rowsPerColumn+categories.length+3)*rowStep+130;
- const nonstockHeight=dailyNonstock.length?150+dailyNonstock.length*52:0;
- report.height=inventoryTop+inventoryHeight+nonstockHeight+110;
- const pc=report.getContext('2d');pc.fillStyle='#171717';pc.fillRect(0,0,report.width,report.height);
+ const overviewHeight=Math.max(470,stockTop-105);
+ const overviewBottom=Math.ceil(overviewHeight*1600/1080);
+ const inventoryTop=overviewBottom+115;
+ const rowStep=67,categoryStep=69;
+ const groups=[];let group=null;
+ for(const item of stockDailyRows){
+  const cat=glurFinStockCategory(item.stock_name);
+  if(!group||group.name!==cat){group={name:cat,items:[]};groups.push(group);}
+  group.items.push(item);
+ }
+ const stockHeight=groups.reduce((n,g)=>n+categoryStep+g.items.length*rowStep+25,0);
+ const nonstockHeight=dailyNonstock.length?115+dailyNonstock.length*rowStep:0;
+ report.height=inventoryTop+stockHeight+nonstockHeight+125;
+ const pc=report.getContext('2d');
+ pc.fillStyle='#171717';pc.fillRect(0,0,report.width,report.height);
  pc.drawImage(canvas,0,0,1080,overviewHeight,0,0,1600,overviewBottom);
- pc.fillStyle='#ff913d';pc.font='bold 38px sans-serif';
- pc.fillText('สต๊อกทั้งหมด '+stockDailyRows.length+' รายการ · ต้น / ใช้ / รับ / เหลือ',45,inventoryTop-18);
- const split=rowsPerColumn;
+ pc.fillStyle='#ff913d';pc.font='bold 42px sans-serif';
+ pc.fillText('สต๊อกทั้งหมด '+stockDailyRows.length+' รายการ',55,inventoryTop-45);
+ pc.fillStyle='#aaa';pc.font='27px sans-serif';
+ pc.fillText('ต้นวัน     /     ใช้ไป     /     รับเข้า     /     คงเหลือ',55,inventoryTop-6);
  const qty=v=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:2});
- for(let col=0;col<2;col++){
-  const x=45+col*790,rows=stockDailyRows.slice(col*split,(col+1)*split);
-  let yy=inventoryTop+44,lastCat='';
-  for(const [idx,item] of rows.entries()){
-   const cat=glurFinStockCategory(item.stock_name);
-   if(cat!==lastCat){lastCat=cat;pc.fillStyle='#ff913d';pc.font='bold 22px sans-serif';pc.fillText(cat,x,yy,735);yy+=43;}
-   if(idx%2===0){pc.fillStyle='#242424';pc.fillRect(x-8,yy-28,750,44);}
-   pc.fillStyle='#fff';pc.font='20px sans-serif';
-   pc.fillText((col*split+idx+1)+'. '+item.stock_name,x,yy,315);
-   pc.font='17px sans-serif';pc.textAlign='right';
-   pc.fillStyle='#aaa';pc.fillText('ต้น '+qty(item.opening),x+423,yy,108);
-   pc.fillStyle='#ff7070';pc.fillText('−'+qty(item.used),x+507,yy,78);
-   pc.fillStyle='#55d58a';pc.fillText('+'+qty(item.added),x+588,yy,78);
-   pc.fillStyle='#fff';pc.fillText('เหลือ '+qty(item.ending)+' '+item.unit,x+735,yy,139);
+ let yy=inventoryTop+38,number=0;
+ for(const group of groups){
+  pc.fillStyle='#ff913d';pc.font='bold 31px sans-serif';pc.fillText('หมวด '+group.name,55,yy,1470);yy+=categoryStep;
+  for(const item of group.items){
+   number++;
+   if(number%2===0){pc.fillStyle='#252525';pc.fillRect(42,yy-39,1515,61);}
+   pc.fillStyle='#fff';pc.font='30px sans-serif';
+   pc.fillText(number+'. '+item.stock_name,60,yy,720);
+   pc.textAlign='right';pc.font='27px sans-serif';
+   pc.fillStyle='#c6c6c6';pc.fillText('ต้น '+qty(item.opening),1020,yy,190);
+   pc.fillStyle=Number(item.used)?'#ff7070':'#777';pc.fillText(Number(item.used)?'−'+qty(item.used):'—',1180,yy,135);
+   pc.fillStyle=Number(item.added)?'#55d58a':'#777';pc.fillText(Number(item.added)?'+'+qty(item.added):'—',1320,yy,125);
+   pc.fillStyle='#fff';pc.fillText(qty(item.ending)+' '+item.unit,1550,yy,215);
    pc.textAlign='left';yy+=rowStep;
   }
+  yy+=25;
  }
  if(dailyNonstock.length){
-  let yy=inventoryTop+inventoryHeight;
-  pc.fillStyle='#ff913d';pc.font='bold 30px sans-serif';pc.fillText('ส่วนผสมไม่ตัดสต๊อกที่ใช้ในวันนี้',45,yy);yy+=55;
-  dailyNonstock.forEach((item,i)=>{const x=45+(i%2)*790;if(i%2===0&&i>0)yy+=52;pc.fillStyle='#fff';pc.font='21px sans-serif';pc.fillText(item.name,x,yy,490);pc.fillStyle='#ff7070';pc.textAlign='right';pc.fillText('−'+qty(item.quantity_used)+' '+item.unit,x+735,yy);pc.textAlign='left';});
+  yy+=25;pc.fillStyle='#ff913d';pc.font='bold 33px sans-serif';
+  pc.fillText('ส่วนผสมไม่ตัดสต๊อกที่ใช้วันนี้ ('+dailyNonstock.length+' รายการ)',55,yy);yy+=75;
+  for(const item of dailyNonstock){
+   pc.fillStyle='#fff';pc.font='29px sans-serif';pc.fillText(item.name,65,yy,1050);
+   pc.fillStyle='#ff7070';pc.textAlign='right';pc.fillText('−'+qty(item.quantity_used)+' '+item.unit,1540,yy);pc.textAlign='left';yy+=rowStep;
+  }
  }
- pc.fillStyle='#aaa';pc.font='21px sans-serif';
- pc.fillText('GLUR BAR · '+reportMode+' · '+day+' · รายงานสรุปภาพเดียว · สต๊อกย้อนหลังเป็นยอดคำนวณ ไม่กระทบยอดปัจจุบัน',45,report.height-40,1500);
+ pc.fillStyle='#aaa';pc.font='23px sans-serif';
+ pc.fillText('GLUR BAR · '+reportMode+' · '+day+' · ภาพเดียว · สต๊อกย้อนหลังเป็นยอดคำนวณ ไม่กระทบยอดปัจจุบัน',55,report.height-45,1490);
  const blob=await new Promise(resolve=>report.toBlob(resolve,'image/png'));
  if(!blob)throw Error('สร้างภาพรายวันไม่สำเร็จ');
  const url=URL.createObjectURL(blob),link=document.createElement('a');
