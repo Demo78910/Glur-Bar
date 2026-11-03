@@ -2076,6 +2076,7 @@ function renderGlurClosing(){
  if(form)form.onsubmit=async e=>{
   e.preventDefault();const day=form.elements.businessDate.value;window.glurClosingDate=day;
   if(day>glurThaiBusinessToday()){toast('ไม่สามารถปิดยอดวันทำการในอนาคต');return}
+  if(glurClosingRows.some(c=>c.business_date===day&&c.period_end&&Date.parse(c.period_end)>=Date.parse(glurCRShift(day,1)+'T03:00:00+07:00'))){toast('วันที่ '+day+' ปิดยอดครบแล้ว กรุณาเปิดสรุปปิดยอด ไม่ต้องปิดซ้ำ');return}
   if(!confirm('ยืนยันปิดยอดรอบปัจจุบันของวันที่ '+day+'? หากมีการขายต่อจะเป็นรอบใหม่'))return;
   const btn=form.querySelector('[type=submit]');btn.disabled=true;
   try{const {error}=await glurSupabase.rpc('glur_close_business_day',{p_shop_id:GLUR_SHOP_ID,p_business_date:day,p_note:form.elements.note.value});if(error)throw error;toast('ปิดยอดสำเร็จ');await glurLoadClosings()}
