@@ -1943,7 +1943,7 @@ setPage=function(p){glurResetPreviousSetPage(p);if(p==='settings'&&glurAdjustRol
 
 
 // GLUR BAR Daily Closing + Profit Analytics (Supabase read-only reports + immutable close snapshots)
-let glurProfitMonth='',glurProfitData=null,glurProfitBusy=false,glurProfitError='';
+let glurProfitMonth='',glurProfitData=null,glurProfitStock=null,glurProfitBusy=false,glurProfitError='';
 let glurClosingRows=[],glurClosingError='',glurClosingBusy=false;
 function glurThaiCalendarMonth(){
  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit'}).formatToParts(new Date());
@@ -1962,8 +1962,8 @@ function glurMoneySafe(v){return money(Number(v)||0)}
 function glurProfitMonthDates(m){if(!/^\d{4}-\d{2}$/.test(m))throw Error('เดือนที่เลือกไม่ถูกต้อง');const [y,mon]=m.split('-').map(Number);if(mon<1||mon>12)throw Error('เดือนที่เลือกไม่ถูกต้อง');return [m+'-01',new Date(Date.UTC(y,mon,0)).toISOString().slice(0,10)]}
 async function glurFetchProfit(m){
  if(glurProfitBusy)return;glurProfitBusy=true;glurProfitError='';
- try{const [p_from,p_to]=glurProfitMonthDates(m);const {data,error}=await glurSupabase.rpc('glur_profit_report',{p_shop_id:GLUR_SHOP_ID,p_from,p_to});if(error)throw error;glurProfitData=data;glurProfitMonth=m}
- catch(e){glurProfitError=e.message||String(e);glurProfitData=null}
+ try{const shop=GLUR_SHOP_ID;const [p_from,p_to]=glurProfitMonthDates(m);const [profit,stock]=await Promise.all([glurSupabase.rpc('glur_profit_report',{p_shop_id:shop,p_from,p_to}),glurSupabase.rpc('glur_monthly_stock_summary',{p_shop_id:shop,p_month:p_from})]);if(profit.error)throw profit.error;if(stock.error)throw stock.error;if(GLUR_SHOP_ID!==shop)throw Error('โหมด TEST/LIVE เปลี่ยนระหว่างโหลด');glurProfitData=profit.data;glurProfitStock=stock.data;glurProfitMonth=m}
+ catch(e){glurProfitError=e.message||String(e);glurProfitData=null;glurProfitStock=null}
  finally{glurProfitBusy=false;if(page==='profit')renderGlurProfit()}
 }
 function renderGlurProfit(){
@@ -1972,14 +1972,23 @@ function renderGlurProfit(){
  const top=menus.slice().sort((a,b)=>Number(b.qty)-Number(a.qty)).slice(0,10);
  const high=menus.filter(x=>Number(x.qty)>0).sort((a,b)=>Number(b.cogs)/Number(b.qty)-Number(a.cogs)/Number(a.qty)).slice(0,10);
  const metricLine=(label,value)=>`<div class="tableline"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+ const stock=glurProfitStock;const qty=v=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:3});
+ const stockPanel=stock?`<div class="section-title">สรุปสต๊อกประจำเดือน · ${esc(stock.from)} ถึง ${esc(stock.to)}</div>
+ <div class="card"><div class="hint">ยอดยกมา + รับเข้า − ใช้ไป ± ปรับยอด = ยอดสิ้นเดือน · ใช้ฐานข้อมูลเดียวกับรายงานรายวัน</div>
+ <div class="tableline"><span>วัตถุดิบทั้งหมด</span><strong>${Number(stock.stock_count||0)} รายการ</strong></div>
+ <div class="tableline"><span>ยอดยกมาข้ามวันไม่ตรง</span><strong style="color:${Number(stock.rollover_errors)?'#e24b4b':'#278653'}">${Number(stock.rollover_errors||0)} รายการ</strong></div>
+ <div class="tableline"><span>สต๊อกติดลบระหว่างเดือน</span><strong style="color:${Number(stock.negative_stock_count)?'#e24b4b':'#278653'}">${Number(stock.negative_stock_count||0)} วัตถุดิบ</strong></div>
+ ${Number(stock.rollover_errors||0)?'<div class="hint warn">เดือนนี้มีวันที่ยอดยกมาไม่ต่อเนื่องกับวันก่อนหน้า (เช่น มีการตั้งต้นย้อนหลังระหว่างเดือน) ต้องตรวจสอบก่อนยืนยันรายงานทั้งเดือน</div>':''}
+ ${(stock.items||[]).map(x=>`<div class="tableline" style="display:block;border-bottom:1px solid #544239;padding:10px 0"><strong>${esc(x.name)}</strong><div class="small muted">ต้น ${qty(x.opening)} · <span style="color:#278653">รับ +${qty(x.received)}</span> · <span style="color:#e24b4b">ใช้ −${qty(x.used)}</span> · ปรับ ${qty(x.adjusted)} · <strong>เหลือ ${qty(x.closing)} ${esc(x.unit)}</strong></div></div>`).join('')}</div>`:'';
  shell('วิเคราะห์กำไร',`<div class="card"><div class="field"><label>เลือกเดือน (ตามวันทำการ 03:00–02:59 เวลาไทย)</label><input id="profitMonth" type="month" value="${esc(m)}"></div><button class="btn secondary full" style="margin-top:9px" id="profitReload">↻ โหลดรายงาน</button>${glurProfitError?`<div class="hint warn">${esc(glurProfitError)}</div>`:''}${glurProfitBusy?'<div class="hint">กำลังโหลดรายงาน…</div>':''}</div>
  ${d?`<div class="grid">${metric('ยอดขาย',glurMoneySafe(s.revenue))}${metric('ต้นทุนขาย',glurMoneySafe(s.cogs))}${metric('กำไรขั้นต้น',glurMoneySafe(Number(s.revenue)-Number(s.cogs)))}${metric('จำนวนแก้ว',String(s.qty||0))}</div>
  <div class="card">${metricLine('ค่าใช้จ่ายที่บันทึก',glurMoneySafe(s.expenses))}${metricLine('กำไรหลังหักค่าใช้จ่ายที่บันทึก',glurMoneySafe(Number(s.revenue)-Number(s.cogs)-Number(s.expenses)))}${metricLine('อัตรากำไรขั้นต้น',Number(s.revenue)>0?(((Number(s.revenue)-Number(s.cogs))/Number(s.revenue))*100).toFixed(1)+'%':'—')}</div>
  <div class="section-title">เมนูขายดี (ตามจำนวนแก้ว)</div><div class="card">${top.length?top.map(x=>metricLine(x.name,`${x.qty} แก้ว · ${glurMoneySafe(x.revenue)}`)).join(''):empty('ไม่มีรายการขาย')}</div>
  <div class="section-title">เมนูต้นทุนต่อแก้วสูงสุด (เฉลี่ยจากยอดขายจริง)</div><div class="card">${high.length?high.map(x=>metricLine(x.name,`${glurMoneySafe(Number(x.cogs)/Number(x.qty))}/แก้ว · กำไรขั้นต้น ${glurMoneySafe(Number(x.revenue)-Number(x.cogs))}`)).join(''):empty('ไม่มีข้อมูลต้นทุน')}</div>
  <div class="section-title">ยอดขายรายวัน</div><div class="card">${days.map(x=>metricLine(x.date,`${glurMoneySafe(x.revenue)} · ${x.qty} แก้ว · กำไร ${glurMoneySafe(Number(x.revenue)-Number(x.cogs))}`)).join('')}</div>`:'<div class="hint">กดโหลดรายงานเพื่อดูยอดขายรายวัน รายเดือน และกำไรต่อเมนู</div>'}
+ ${stockPanel}
  <div class="hint">ต้นทุนต่อแก้ว = ต้นทุนขายสะสม ÷ จำนวนแก้วที่ขาย · กำไรขั้นต้น = ยอดขาย − ต้นทุนขาย · ไม่รวมค่าแรง ค่าเช่า ภาษี หรือรายการที่ยังไม่ได้บันทึก</div>`);
- document.getElementById('profitMonth').onchange=e=>{glurProfitMonth=e.target.value;glurProfitData=null;glurFetchProfit(glurProfitMonth)};
+ document.getElementById('profitMonth').onchange=e=>{glurProfitMonth=e.target.value;glurProfitData=null;glurProfitStock=null;glurFetchProfit(glurProfitMonth)};
  document.getElementById('profitReload').onclick=()=>glurFetchProfit(document.getElementById('profitMonth').value);
 }
 async function glurLoadClosings(){
