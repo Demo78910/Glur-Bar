@@ -2378,7 +2378,11 @@ async function glurTestFinanceExport(kind){
  const openingAdjustments=await allHistorical(()=>glurSupabase.from('glur_historical_opening_adjustments').select('stock_id,quantity,effective_date').eq('shop_id',reportShop).lte('effective_date',day).order('stock_id'));
  const adjustmentById=new Map();for(const x of openingAdjustments)adjustmentById.set(String(x.stock_id),(adjustmentById.get(String(x.stock_id))||0)+Number(x.quantity));
  const currentById=new Map(currentStock.map(x=>[String(x.id),Number(x.quantity)]));
- const stockDailyRows=sortedItems.map(x=>{const flow=flowById.get(String(x.stock_id));const used=flow?.used||0,added=flow?.added||0;const current=currentById.get(String(x.stock_id));const ending=Number.isFinite(current)?current-(futureDelta.get(x.stock_id)||0)+(adjustmentById.get(String(x.stock_id))||0):null;return {...x,opening:ending===null?null:ending+used-added,used,added,ending};});
+ const {data:ledgerRows,error:ledgerError}=await glurSupabase.rpc('glur_daily_stock_reconciliation',{p_shop_id:reportShop,p_from:day,p_to:day});
+ if(ledgerError)throw new Error('โหลดประวัติสต๊อกตามวันที่ไม่สำเร็จ: '+ledgerError.message);
+ if(GLUR_SHOP_ID!==reportShop)throw Error('โหมดเปลี่ยนระหว่างโหลดรายงาน');
+ const ledgerById=new Map((ledgerRows||[]).map(x=>[String(x.stock_id),x]));
+ const stockDailyRows=sortedItems.map(x=>{const ledger=ledgerById.get(String(x.stock_id));if(!ledger)throw Error('ไม่พบยอดสต๊อกย้อนหลังของ '+x.stock_name);return {...x,opening:Number(ledger.opening_quantity),used:Number(ledger.used_quantity),added:Number(ledger.received_quantity)+Math.max(0,Number(ledger.adjusted_quantity)),ending:Number(ledger.closing_quantity)};});
  const menuLines=Array.from(menus.entries()).sort((a,b)=>b[1].qty-a[1].qty);
  const canvas=document.createElement('canvas');canvas.width=1080;
  const rowHeight=46,menuTop=475,flowTop=menuTop+85+Math.max(1,menuLines.length)*rowHeight,stockTop=flowTop+flowHeight;const categories=Array.from(new Set(sortedItems.map(x=>glurFinStockCategory(x.stock_name))));
