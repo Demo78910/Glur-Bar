@@ -3377,8 +3377,14 @@ function glurClosingRevisionLabel(x){return x.cost_revised_at?`<details class="h
   button.textContent='⇩ ดึงสูตรจาก TEST';button.onclick=()=>openImport(kind);
   app.insertBefore(button,app.children[1]||null);
  }
- const oldRecipes=renderRecipes;renderRecipes=function(){oldRecipes.apply(this,arguments);if(!recipeDetailId)addImportButton('cocktail')};
- const oldPb=pbRender;pbRender=function(){oldPb.apply(this,arguments);if(pbMode==='list')addImportButton('prebatch')};
+ if(typeof renderRecipes==='function'){
+  const oldRecipes=renderRecipes;
+  renderRecipes=function(){oldRecipes.apply(this,arguments);if(typeof recipeDetailId!=='undefined'&&!recipeDetailId)addImportButton('cocktail')};
+ }
+ if(typeof pbRender==='function'){
+  const oldPb=pbRender;
+  pbRender=function(){oldPb.apply(this,arguments);if(typeof pbMode!=='undefined'&&pbMode==='list')addImportButton('prebatch')};
+ }
  async function openImport(kind){
   if(!glurIsDeveloper()||GLUR_SHOP_ID!==GLUR_LIVE_SHOP_ID)return;
   document.getElementById('glurImportDialog')?.remove();
@@ -3436,8 +3442,14 @@ function glurClosingRevisionLabel(x){return x.cost_revised_at?`<details class="h
   button.textContent='⇩ ดึงสูตรจาก LIVE';button.onclick=()=>openImport(kind);
   app.insertBefore(button,app.children[1]||null);
  }
- const oldRecipes=renderRecipes;renderRecipes=function(){oldRecipes.apply(this,arguments);if(!recipeDetailId)addImportButton('cocktail')};
- const oldPb=pbRender;pbRender=function(){oldPb.apply(this,arguments);if(pbMode==='list')addImportButton('prebatch')};
+ if(typeof renderRecipes==='function'){
+  const oldRecipes=renderRecipes;
+  renderRecipes=function(){oldRecipes.apply(this,arguments);if(typeof recipeDetailId!=='undefined'&&!recipeDetailId)addImportButton('cocktail')};
+ }
+ if(typeof pbRender==='function'){
+  const oldPb=pbRender;
+  pbRender=function(){oldPb.apply(this,arguments);if(typeof pbMode!=='undefined'&&pbMode==='list')addImportButton('prebatch')};
+ }
  async function openImport(kind){
   if(!glurIsDeveloper()||GLUR_SHOP_ID!==GLUR_TEST_SHOP_ID)return;
   document.getElementById('glurImportLiveDialog')?.remove();
