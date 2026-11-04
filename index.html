@@ -2443,7 +2443,7 @@ async function glurTestFinanceExport(kind){
  if(ledgerError)throw new Error('โหลดประวัติสต๊อกตามวันที่ไม่สำเร็จ: '+ledgerError.message);
  if(GLUR_SHOP_ID!==reportShop)throw Error('โหมดเปลี่ยนระหว่างโหลดรายงาน');
  const ledgerById=new Map((ledgerRows||[]).map(x=>[String(x.stock_id),x]));
- const stockDailyRows=sortedItems.map(x=>{const ledger=ledgerById.get(String(x.stock_id));if(!ledger)throw Error('ไม่พบยอดสต๊อกย้อนหลังของ '+x.stock_name);return {...x,opening:Number(ledger.opening_quantity),used:Number(ledger.used_quantity),added:Number(ledger.received_quantity)+Math.max(0,Number(ledger.adjusted_quantity)),ending:Number(ledger.closing_quantity)};});
+ const stockDailyRows=sortedItems.map(x=>{const ledger=ledgerById.get(String(x.stock_id));if(!ledger)throw Error('ไม่พบยอดสต๊อกย้อนหลังของ '+x.stock_name);return {...x,opening:Number(ledger.opening_quantity),used:Number(ledger.used_quantity),added:Number(ledger.received_quantity)+Math.max(0,Number(ledger.adjusted_quantity)),ending:currentById.has(String(x.stock_id))?currentById.get(String(x.stock_id)):null};});
  // Historical ENT musician pours are stock movements, not paid sales. Show them without deducting stock again.
  const thaiDay=t=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Bangkok',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(t)).map(x=>[x.type,x.value]));return p.year+'-'+p.month+'-'+p.day;};
  const entMovements=allMovements.filter(x=>String(x.reason||'').startsWith('Regency แก้ว ENT นักดนตรี') && thaiDay(x.created_at)===day && Number(x.quantity_change)<0);
@@ -2487,11 +2487,11 @@ async function glurTestFinanceExport(kind){
  y=regencyTop;ctx.fillStyle='#ff913d';ctx.font='bold 30px sans-serif';ctx.fillText('รายละเอียดการใช้ Regency ('+regencyTotal+' ml)',50,y);y+=50;
  if(!regencyDetails.length){ctx.fillStyle='#bbb';ctx.font='22px sans-serif';ctx.fillText('ไม่มีรายการใช้ Regency วันนี้',55,y);}
  for(const x of regencyDetails){ctx.fillStyle='#fff';ctx.font='22px sans-serif';ctx.fillText(x.name,55,y,740);ctx.fillStyle='#ff7070';ctx.textAlign='right';ctx.fillText('−'+x.ml+' ml',1020,y);ctx.textAlign='left';y+=46;}
- y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อกคำนวณย้อนหลัง: ต้นวัน / ใช้ / รับ / คงเหลือ'+' ('+sortedItems.length+' รายการ)',50,y);
+ y=stockTop;ctx.fillStyle='#ff913d';ctx.font='bold 31px sans-serif';ctx.fillText('สต๊อก: ต้นวัน / ใช้ / รับ / คงเหลือปัจจุบัน'+' ('+sortedItems.length+' รายการ)',50,y);
  y+=58;let currentCategory='';for(let i=0;i<stockDailyRows.length;i++){const x=stockDailyRows[i];const cat=glurFinStockCategory(x.stock_name);if(cat!==currentCategory){if(currentCategory)y+=rowHeight;currentCategory=cat;ctx.fillStyle='#ff913d';ctx.font='bold 25px sans-serif';ctx.fillText('หมวด '+cat,55,y);y+=rowHeight}if(i%2===0){ctx.fillStyle='#222222';ctx.fillRect(42,y-31,996,rowHeight)}
  ctx.fillStyle='#ffffff';ctx.font='23px sans-serif';ctx.fillText(String(i+1).padStart(2,'0')+'. '+x.stock_name,55,y,460);
  const fmtQty=v=>v===null?'ไม่มีข้อมูล':Number(v).toLocaleString('th-TH',{maximumFractionDigits:3});
- ctx.textAlign='right';ctx.font='20px sans-serif';ctx.fillStyle='#cccccc';ctx.fillText('ต้น '+fmtQty(x.opening),700,y);ctx.fillStyle='#ff7070';ctx.fillText('−'+fmtQty(x.used),805,y);ctx.fillStyle='#55d58a';ctx.fillText('+'+fmtQty(x.added),895,y);ctx.fillStyle='#ffffff';ctx.fillText('เหลือ '+fmtQty(x.ending)+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
+ ctx.textAlign='right';ctx.font='20px sans-serif';ctx.fillStyle='#cccccc';ctx.fillText('ต้น '+fmtQty(x.opening),700,y);ctx.fillStyle='#ff7070';ctx.fillText('−'+fmtQty(x.used),805,y);ctx.fillStyle='#55d58a';ctx.fillText('+'+fmtQty(x.added),895,y);ctx.fillStyle='#ffffff';ctx.fillText('ตอนนี้ '+fmtQty(x.ending)+' '+x.unit,1020,y);ctx.textAlign='left';y+=rowHeight}
  y=glurFinDrawNonstock(ctx,dailyNonstock,y,rowHeight);
  ctx.fillStyle='#aaaaaa';ctx.font='20px sans-serif';ctx.fillText('ยอดคำนวณย้อนหลัง รวมยอดยกมาจำลอง (ไม่ใช่รับเข้าจริง) · ไม่กระทบสต๊อกปัจจุบัน · '+(GLUR_SHOP_ID===GLUR_TEST_SHOP_ID?'TEST':'LIVE'),50,canvas.height-40);
  // Single shareable PNG, with two clearly separated inventory columns.
@@ -2519,7 +2519,7 @@ async function glurTestFinanceExport(kind){
  const pc=report.getContext('2d');pc.fillStyle='#171717';pc.fillRect(0,0,report.width,report.height);
  pc.drawImage(canvas,0,0,1080,overviewHeight,0,0,1800,overviewBottom);
  pc.fillStyle='#ff913d';pc.font='bold 43px sans-serif';
- pc.fillText('สต๊อกทั้งหมด '+stockDailyRows.length+' รายการ · แยกตามหมวดหมู่',48,inventoryTop-42);
+ pc.fillText('สต๊อกปัจจุบัน '+stockDailyRows.length+' รายการ · แยกตามหมวดหมู่',48,inventoryTop-42);
  const qty=v=>Number(v||0).toLocaleString('th-TH',{maximumFractionDigits:2});
  // Strong center separator keeps left and right columns visually distinct.
  pc.fillStyle='#ff913d';pc.fillRect(892,inventoryTop-10,3,inventoryHeight+15);
@@ -2546,7 +2546,7 @@ async function glurTestFinanceExport(kind){
      {label:'ต้น',value:qty(item.opening),color:'#e0e0e0'},
      {label:'ใช้',value:Number(item.used)?'−'+qty(item.used):'—',color:Number(item.used)?'#ff7777':'#888'},
      {label:'รับ',value:Number(item.added)?'+'+qty(item.added):'—',color:Number(item.added)?'#5ee5a0':'#888'},
-     {label:'เหลือ',value:qty(item.ending)+' '+item.unit,color:'#fff'}
+     {label:'ตอนนี้',value:item.ending===null?'ไม่มีข้อมูล':qty(item.ending)+' '+item.unit,color:'#fff'}
     ];
     const cellWidth=204;
     for(let k=0;k<4;k++){
