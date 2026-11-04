@@ -1488,8 +1488,13 @@ function renderGlurSales(){
       });
       if(error)throw error;
       sessionStorage.removeItem(pendingKey);
-      toast('บันทึกการขายออนไลน์สำเร็จ');
-      await Promise.all([loadCloudStock(),loadGlurSales()]);
+      glurSalesBusy=false;
+      button.disabled=false;button.textContent='บันทึกสำเร็จ ✓';
+      toast('บันทึกการขายสำเร็จ · กำลังอัปเดตข้อมูล');
+      // Do not block completion on secondary reads: slow mobile connections can stall refresh.
+      Promise.allSettled([loadCloudStock(),loadGlurSales()]).then(()=>{
+        if(currentUser&&page==='sales')renderGlurSales();
+      });
       if(currentUser&&page==='sales')renderGlurSales();
     }catch(err){toast('ยังยืนยันผลขายไม่ได้: '+(err.message||err)+' · หากเน็ตหลุด ให้ลองกดรายการเดิมอีกครั้งก่อนสร้างรายการใหม่');button.disabled=false;button.textContent='ยืนยันขายและตัดสต๊อก'}
     finally{glurSalesBusy=false}
