@@ -1497,7 +1497,17 @@ function renderGlurSales(){
       });
       if(currentUser&&page==='sales')renderGlurSales();
     }catch(err){toast('ยังยืนยันผลขายไม่ได้: '+(err.message||err)+' · หากเน็ตหลุด ให้ลองกดรายการเดิมอีกครั้งก่อนสร้างรายการใหม่');button.disabled=false;button.textContent='ยืนยันขายและตัดสต๊อก'}
-    finally{glurSalesBusy=false}
+    finally{
+      // Every completion path must unlock both the original and any re-rendered form.
+      glurSalesBusy=false;
+      const activeForm=document.getElementById('glurCloudSaleForm');
+      if(activeForm){
+        const activeButton=activeForm.querySelector('[type=submit]');
+        if(activeButton){activeButton.disabled=false;activeButton.textContent='ยืนยันขายและตัดสต๊อก'}
+      }
+      button.disabled=false;
+      if(button.textContent==='กำลังบันทึก…')button.textContent='ยืนยันขายและตัดสต๊อก';
+    }
   };
 }
 function glurAdjustmentEditor(s,ingredients){
