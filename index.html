@@ -1370,7 +1370,7 @@ function renderGlurSales(){
     const ingredients=glurSaleIngredients.filter(i=>i.sale_id===s.id);
     const adjustButton=glurCanAdjust()&&ingredients.length?`<button type="button" class="btn secondary smallbtn" data-glur-adjust="${s.id}" style="margin-top:9px">ปรับวัตถุดิบที่ใช้จริง</button>`:'';
     const editor=glurEditingSaleId===s.id&&glurCanAdjust()?glurAdjustmentEditor(s,ingredients):'';
-    return `<div class="item"><div style="min-width:0"><div class="item-name">${name}</div><div class="small muted">${esc(glurSaleDate(s.sold_at||s.created_at))} · ต้นทุน ${money(s.total_cost)}</div>${Array.isArray(s.nonstock_snapshot)&&s.nonstock_snapshot.length?`<div class="small muted">ไม่ตัดสต๊อก: ${s.nonstock_snapshot.map(i=>esc(i.name)+' '+num(i.quantity_used)+' '+esc(i.unit)).join(' · ')}</div>`:''}${s.note?`<div class="small muted" style="white-space:pre-wrap">หมายเหตุ: ${esc(s.note)}</div>`:''}${adjustButton}${editor}</div><strong style="white-space:nowrap">${money(s.total_amount)}</strong></div>`;
+    return `<div class="item"><div style="min-width:0"><div class="item-name">${name} ${String(s.note||"").startsWith("[ENT]")?"· ENT":""}</div><div class="small muted">${esc(glurSaleDate(s.sold_at||s.created_at))} · ต้นทุน ${money(s.total_cost)}</div>${Array.isArray(s.nonstock_snapshot)&&s.nonstock_snapshot.length?`<div class="small muted">ไม่ตัดสต๊อก: ${s.nonstock_snapshot.map(i=>esc(i.name)+' '+num(i.quantity_used)+' '+esc(i.unit)).join(' · ')}</div>`:''}${s.note?`<div class="small muted" style="white-space:pre-wrap">หมายเหตุ: ${esc(s.note)}</div>`:''}${adjustButton}${editor}</div><strong style="white-space:nowrap">${money(s.total_amount)}</strong></div>`;
   }).join('');
   shell('ขายเครื่องดื่ม · ออนไลน์',`
     <div class="hint">บันทึกยอดขายและตัดสต๊อกผ่าน Supabase · Staff / Manager / Owner บันทึกขายและหมายเหตุได้ · หมายเหตุไม่เปลี่ยนปริมาณที่ตัดตามสูตร</div>
@@ -1389,11 +1389,13 @@ function renderGlurSales(){
           <div class="field"><label>จำนวนแก้ว</label><input name="quantity" type="number" min="1" step="1" value="1" required></div>
           <div class="field"><label>ยอดขายรวมโดยประมาณ</label><div id="glurSaleTotal" class="detail-value" style="font-size:19px;padding:8px 0">—</div></div>
         </div>
+        <div class="field"><label>ประเภทการขาย</label><select name="sale_mode"><option value="normal">ขายปกติ</option>${glurCanAdjust()?`<option value="ent">ENT — ฟรี ฿0</option><option value="custom">ปรับราคาขาย</option>`:""}</select></div><div class="field" id="glurCustomPriceBox" style="display:none"><label>ราคาขายต่อแก้ว (บาท)</label><input name="custom_price" type="number" min="0" step="0.01" value="0"></div>
         <div class="field"><label>หมายเหตุการขาย (ไม่บังคับ)</label><textarea name="note" rows="3" maxlength="2000"></textarea></div>
         <div id="glurSalePreview" class="small muted"></div>
         <button type="submit" class="btn full" ${glurSalesBusy||!cloudRecipes.some(r=>r.is_active!==false)?'disabled':''}>${glurSalesBusy?'กำลังบันทึก…':'ยืนยันขายและตัดสต๊อก'}</button>
       </form>
     </div>
+    <div class="card"><strong>สรุป ENT (จากประวัติล่าสุด)</strong><div class="metric">${glurSales.filter(s=>String(s.note||'').startsWith('[ENT]')&&!s.is_backdated).reduce((n,s)=>n+num(s.quantity_sold||1),0)} แก้ว</div><div class="small muted">ต้นทุน ${money(glurSales.filter(s=>String(s.note||'').startsWith('[ENT]')&&!s.is_backdated).reduce((n,s)=>n+num(s.total_cost),0))} · รายการล่าสุด ${glurSaleHistoryLimit} รายการ</div></div>
     <div class="row between"><div class="section-title">ประวัติการขายล่าสุด</div><button class="btn secondary smallbtn" id="glurRefreshSales">↻ รีเฟรช</button></div>
     ${glurSalesError?`<div class="hint warn">โหลดประวัติไม่ได้: ${esc(glurSalesError)}</div>`:''}
     <div class="card">${!glurSalesReady&&!glurSalesError?'กำลังโหลดประวัติ…':history||empty('ยังไม่มีประวัติการขาย')}</div>
@@ -1434,7 +1436,7 @@ function renderGlurSales(){
   const selector=form.elements.recipe_id;
   const preview=()=>{
     const r=cloudRecipes.find(x=>x.id===selector.value),qty=Number(form.elements.quantity.value);
-    document.getElementById('glurSaleTotal').textContent=r&&Number.isInteger(qty)&&qty>0?money(num(r.selling_price)*qty):'—';
+    document.getElementById('glurSaleTotal').textContent=r&&Number.isInteger(qty)&&qty>0?money((form.elements.sale_mode.value==='ent'?0:form.elements.sale_mode.value==='custom'?Number(form.elements.custom_price.value):num(r.selling_price))*qty):'—';
     if(!r){document.getElementById('glurSalePreview').textContent='เลือกเมนูเพื่อดูวัตถุดิบที่จะตัด';return}
     const ing=(r.ingredients||[]).map(i=>{
       const st=cloudStock.find(x=>x.id===i.stock_id),needed=num(i.quantity)*qty;
@@ -1444,7 +1446,7 @@ function renderGlurSales(){
     });
     document.getElementById('glurSalePreview').textContent=ing.length?'ตัดตามสูตร: '+ing.join(' · '):'⚠ สูตรนี้ไม่มีรายการส่วนผสม';
   };
-  selector.onchange=preview;form.elements.quantity.oninput=preview;preview();
+  selector.onchange=preview;form.elements.quantity.oninput=preview;form.elements.sale_mode.onchange=()=>{document.getElementById('glurCustomPriceBox').style.display=form.elements.sale_mode.value==='custom'?'':'none';preview()};form.elements.custom_price.oninput=preview;preview();
   document.getElementById('glurSaleSearch').oninput=e=>{
     const value=e.target.value,selected=selector.value;
     glurSalesSearch=value;
@@ -1457,8 +1459,9 @@ function renderGlurSales(){
   form.onsubmit=async e=>{
     e.preventDefault();if(glurSalesBusy)return;
     const rid=selector.value,r=cloudRecipes.find(x=>x.id===rid);
-    const qty=Number(form.elements.quantity.value),note=String(form.elements.note.value||'').trim();
+    const qty=Number(form.elements.quantity.value),note=String(form.elements.note.value||'').trim(),mode=form.elements.sale_mode.value,price=mode==='ent'?0:mode==='custom'?Number(form.elements.custom_price.value):num(r?.selling_price);
     if(!r||r.is_active===false||!Number.isInteger(qty)||qty<=0){toast('เลือกเมนูที่เปิดใช้งานและจำนวนแก้วที่ถูกต้อง');return}
+    if(!Number.isFinite(price)||price<0||(mode!=='normal'&&!glurCanAdjust())){toast('ไม่มีสิทธิ์ปรับราคาหรือราคาไม่ถูกต้อง');return}
     if(!(r.ingredients||[]).length){toast('สูตรนี้ยังไม่มีส่วนผสม');return}
     const stockWarnings=(r.ingredients||[]).map(i=>{
       const st=cloudStock.find(x=>x.id===i.stock_id);
@@ -1467,21 +1470,21 @@ function renderGlurSales(){
       return missing>0?`${st.name}: ขาด ${Number(missing.toFixed(3))} ${st.unit||''}`:null;
     }).filter(Boolean);
     const warningText=stockWarnings.length?'\n\n⚠ ตรวจสอบสต๊อกก่อนขาย:\n'+stockWarnings.join('\n')+'\n\nการขายอาจทำให้สต๊อกติดลบ หรือถูกฐานข้อมูลปฏิเสธ':'';
-    if(!confirm(`ยืนยันขาย ${r.name} จำนวน ${qty} แก้ว\nยอด ${money(num(r.selling_price)*qty)}${warningText}\n\nดำเนินการต่อ?`))return;
+    if(!confirm(`ยืนยันขาย ${r.name} จำนวน ${qty} แก้ว\nยอด ${money(price*qty)}${mode==='ent'?' (ENT ฟรี)':''}${warningText}\n\nดำเนินการต่อ?`))return;
     glurSalesBusy=true;
     const button=form.querySelector('[type=submit]');button.disabled=true;button.textContent='กำลังบันทึก…';
     try{
       // Keep the same request ID after a network failure, preventing duplicate sales.
       const pendingKey='glur_pending_sale_'+GLUR_SHOP_ID+'_'+(currentUser?.id||'unknown');
-      const fingerprint=JSON.stringify([rid,qty,note||'']);
+      const fingerprint=JSON.stringify([rid,qty,note||'',mode,price]);
       let pending;
       try{pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null')}catch(_){pending=null}
       if(!pending||pending.fingerprint!==fingerprint){
         pending={fingerprint,key:crypto.randomUUID()};
         sessionStorage.setItem(pendingKey,JSON.stringify(pending));
       }
-      const {data:saleId,error}=await glurSupabase.rpc('glur_record_sale_safe',{
-        p_shop_id:GLUR_SHOP_ID,p_recipe_id:rid,p_quantity:qty,p_note:note||null,p_request_key:pending.key
+      const {data:saleId,error}=await glurSupabase.rpc('glur_record_sale_priced',{
+        p_shop_id:GLUR_SHOP_ID,p_recipe_id:rid,p_quantity:qty,p_note:note||null,p_request_key:pending.key,p_mode:mode,p_unit_price:price
       });
       if(error)throw error;
       sessionStorage.removeItem(pendingKey);
